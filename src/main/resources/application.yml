@@ -1,0 +1,7 @@
+spring:
+  application:
+    name: virtual_deadlock_detection
+
+logging:
+  level:
+    root: INFO
