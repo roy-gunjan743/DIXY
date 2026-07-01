@@ -1,11 +1,34 @@
 package com.virtual_deadlock_detection.backend.entity;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
 
+import com.virtual_deadlock_detection.backend.enums.ThreadState;
+
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
 @Entity
-@Table(name = "thread")
+@Table(name = "threads")
 public class ThreadEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private long id;
+    private Long id;
+    @Column(nullable = false,unique = true)
+    private Long threadId;
+    @Column(nullable = false)
+    private String threadName;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private ThreadState state;    private String carrierThread;
+    @Column(nullable = false)
+    private LocalDateTime createdAt;
+    @PrePersist
+    public void prePersist(){
+        this.createdAt=LocalDateTime.now();
+    }
 }
