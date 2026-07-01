@@ -2,6 +2,20 @@ spring:
   application:
     name: virtual_deadlock_detection
 
+  datasource:
+    url: jdbc:mysql://localhost:3306/virtual_deadlock_detection
+    username: root
+    password: gupi@1234
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
 logging:
   level:
     root: INFO
