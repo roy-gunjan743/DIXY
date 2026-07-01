@@ -1,6 +1,9 @@
 package com.virtual_deadlock_detection.agent;
 
+import com.virtual_deadlock_detection.jfr.RecordingManager;
+
 import java.lang.instrument.Instrumentation;
+import com.virtual_deadlock_detection.jfr.RecordingManager;
 
 public class VirtualDeadlockAgent {
 
@@ -12,6 +15,8 @@ public class VirtualDeadlockAgent {
         System.out.println("======================================");
 
         System.out.println("Loaded Classes : " + inst.getAllLoadedClasses().length);
+        RecordingManager recordingManager = new RecordingManager();
+        recordingManager.startRecording();
 
     }
 
