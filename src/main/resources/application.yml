@@ -3,10 +3,15 @@ spring:
     name: virtual_deadlock_detection
 
   datasource:
-    url: jdbc:mysql://localhost:3306/virtual_deadlock_detection
-    username: root
-    password: gupi@1234
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:virtual_deadlock_detection}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:gupi@1234}
     driver-class-name: com.mysql.cj.jdbc.Driver
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
 
   jpa:
     hibernate:
@@ -15,6 +20,18 @@ spring:
     properties:
       hibernate:
         format_sql: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: ${spring.application.name}
 
 logging:
   level:
