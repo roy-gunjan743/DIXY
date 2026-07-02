@@ -16,7 +16,7 @@ public class DeadlockDetector {
     /**
      * Scans the graph and returns all detected cycles.
      */
-    public List<DeadlockCycle> detect(WaitForGraph graph) {
+    public  List<DeadlockCycle> detect(WaitForGraph graph) {
         List<DeadlockCycle> cycles = new ArrayList<>();
         Set<GraphNode> visited = new HashSet<>();
         Set<GraphNode> recursionStack = new HashSet<>();
