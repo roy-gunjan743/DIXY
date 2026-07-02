@@ -13,11 +13,22 @@ public class LockEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
     @Column(nullable = false,unique = true)
     private String lockId;
+
     @Column(nullable = false)
     private String lockType;
+
     @ManyToOne(fetch =FetchType.LAZY)
     @JoinColumn(name ="owner_thread_id")
     private String ownerThread;
+
+    @Column(nullable = false)
+    private LocalDateTime createdAt;
+
+    @PrePersist
+    public void prePersist() {
+        this.createdAt = LocalDateTime.now();}
+
 }
