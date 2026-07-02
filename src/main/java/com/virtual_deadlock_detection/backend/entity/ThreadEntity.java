@@ -5,6 +5,9 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+import java.util.ArrayList;
+import java.util.List;
+
 
 import com.virtual_deadlock_detection.backend.enums.ThreadState;
 
@@ -24,7 +27,13 @@ public class ThreadEntity {
     private String threadName;
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private ThreadState state;    private String carrierThread;
+    private ThreadState state;
+    private String carrierThread;
+    @OneToMany(mappedBy = "ownerThread",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true)
+    private List<LockEntity> ownedLocks = new ArrayList<>();
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
     @PrePersist
