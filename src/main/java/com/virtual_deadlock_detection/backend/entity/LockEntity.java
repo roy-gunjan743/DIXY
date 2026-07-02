@@ -22,7 +22,7 @@ public class LockEntity {
 
     @ManyToOne(fetch =FetchType.LAZY)
     @JoinColumn(name ="owner_thread_id")
-    private String ownerThread;
+    private ThreadEntity ownerThread;
 
     @Column(nullable = false)
     private LocalDateTime createdAt;
