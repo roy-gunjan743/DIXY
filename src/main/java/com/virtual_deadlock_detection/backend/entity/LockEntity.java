@@ -2,6 +2,8 @@ package com.virtual_deadlock_detection.backend.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Getter
 @Setter
@@ -30,5 +32,11 @@ public class LockEntity {
     @PrePersist
     public void prePersist() {
         this.createdAt = LocalDateTime.now();}
+
+    @OneToMany(mappedBy = "lock",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true)
+    private List<WaitEdgeEntity>waitingthread=new ArrayList<>();
+
 
 }
