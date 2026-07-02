@@ -21,13 +21,17 @@ public class ThreadEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
     @Column(nullable = false,unique = true)
     private Long threadId;
+
     @Column(nullable = false)
     private String threadName;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private ThreadState state;
+
     private String carrierThread;
     @OneToMany(mappedBy = "ownerThread",
             cascade = CascadeType.ALL,
@@ -40,4 +44,11 @@ public class ThreadEntity {
     public void prePersist(){
         this.createdAt=LocalDateTime.now();
     }
+
+    @OneToMany(mappedBy = "waitingThread",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true)
+    private List<WaitEdgeEntity>waitingEdges=new ArrayList<>();
+
+
 }
