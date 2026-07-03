@@ -23,30 +23,46 @@ public class GraphGateway {
         switch (eventDTO.getEventType()) {
 
             case THREAD_START -> {
+
                 waitForGraph.addNode(threadNode);
+
                 System.out.println("Virtual Thread Added To Graph");
+
             }
 
             case THREAD_END -> {
+
                 System.out.println("Thread End Event Received");
-                // Node removal will be implemented later
+
+                // TODO
+                // Remove thread node when graph supports removal
+
             }
 
-            default -> {
-                System.out.println("Event not supported yet");
+            case THREAD_BLOCKED -> {
+
+                System.out.println("Thread Blocked");
+
+            }
+
+            case THREAD_PARKED -> {
+
+                System.out.println("Thread Parked");
+
+            }
+
+            case LOCK_ACQUIRE -> {
+
+                System.out.println("Lock Acquire Event");
+
+            }
+
+            case LOCK_RELEASE -> {
+
+                System.out.println("Lock Release Event");
+
             }
 
         }
-        System.out.println("Graph Nodes: " + waitForGraph.getNodes());
-        /*
-            Member 2 integration happens here.
-
-            Example:
-
-            waitForGraph.processEvent(eventDTO);
-
-        */
-
     }
-
 }
