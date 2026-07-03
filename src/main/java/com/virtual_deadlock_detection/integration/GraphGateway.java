@@ -20,6 +20,14 @@ public class GraphGateway {
                 NodeType.VIRTUAL_THREAD,
                 eventDTO.getThreadName()
         );
+
+        GraphNode lockNode = new GraphNode(
+                eventDTO.getLockAddress(),
+                NodeType.LOCK,
+                "Lock-" + eventDTO.getLockAddress()
+        );
+
+
         switch (eventDTO.getEventType()) {
 
             case THREAD_START -> {
@@ -49,4 +57,6 @@ public class GraphGateway {
 
     }
 
+    public void processEvent(EventDTO eventDTO) {
+    }
 }
