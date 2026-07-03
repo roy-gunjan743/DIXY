@@ -21,7 +21,7 @@ public class DeadlockReportEntity {
 
     private boolean resolved;
 
-    private String analysisTimeMicros;
+    private Long analysisTimeMicros;
 
     @Column(nullable = false)
     private LocalDateTime detectedAt;
@@ -29,7 +29,7 @@ public class DeadlockReportEntity {
     @OneToMany(mappedBy = "report",
             cascade = CascadeType.ALL,
             orphanRemoval = true)
-    private List<DeadlockReportEntity>nodes=new ArrayList<>();
+    private List<DeadlockNodeEntity>nodes=new ArrayList<>();
 
 
 
