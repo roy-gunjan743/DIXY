@@ -1,40 +1,46 @@
 package com.virtual_deadlock_detection.backend.service;
-import com.virtual_deadlock_detection.backend.repository.ThreadRepository;
+
 import com.virtual_deadlock_detection.backend.entity.ThreadEntity;
+import com.virtual_deadlock_detection.backend.repository.ThreadRepository;
 import org.springframework.stereotype.Service;
+
 import java.util.List;
 import java.util.Optional;
+
 @Service
 public class ThreadService {
 
     private final ThreadRepository threadRepository;
 
-    public ThreadService(ThreadRepository threadRepository){
-        this.threadRepository=threadRepository;
+    public ThreadService(ThreadRepository threadRepository) {
+        this.threadRepository = threadRepository;
     }
 
-    public ThreadEntity saveThread(ThreadEntity thread){
+    public ThreadEntity saveThread(ThreadEntity thread) {
         return threadRepository.save(thread);
     }
 
-    public ThreadEntity registerThread(ThreadEntity thread){
-        Optional<ThreadEntity>existing=
+    public ThreadEntity registerThread(ThreadEntity thread) {
+
+        Optional<ThreadEntity> existing =
                 threadRepository.findByThreadId(thread.getThreadId());
-        if(existing.isPresent()){
+
+        if (existing.isPresent()) {
             return existing.get();
         }
+
         return threadRepository.save(thread);
     }
 
-    public List<ThreadEntity>getAllThread(){
+    public List<ThreadEntity> getAllThreads() {
         return threadRepository.findAll();
     }
 
-    public Optional<ThreadEntity>getThreadByThreadId(Long threadId){
+    public Optional<ThreadEntity> getThreadByThreadId(Long threadId) {
         return threadRepository.findByThreadId(threadId);
     }
-    public void deleteThread(Long id){
+
+    public void deleteThread(Long id) {
         threadRepository.deleteById(id);
     }
-
 }
