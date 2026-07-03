@@ -10,6 +10,9 @@ public class EventDTO {
     private String threadName;
     private long threadId;
     private LocalDateTime timestamp;
+    private long lockId;
+
+    private String lockName;
 
     // 1. ADD THIS NEW VARIABLE
     private long lockAddress;
@@ -29,6 +32,7 @@ public class EventDTO {
     }
 
     // --- Keep all your existing getters and setters here ---
+
     public EventType getEventType() { return eventType; }
     public void setEventType(EventType eventType) { this.eventType = eventType; }
     public String getThreadName() { return threadName; }
