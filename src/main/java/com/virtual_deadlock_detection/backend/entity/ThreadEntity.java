@@ -50,5 +50,10 @@ public class ThreadEntity {
             orphanRemoval = true)
     private List<WaitEdgeEntity>waitingEdges=new ArrayList<>();
 
+    @OneToMany(mappedBy = "thread",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true)
+    private List<DeadlockNodeEntity> deadlockNodes = new ArrayList<>();
+
 
 }
