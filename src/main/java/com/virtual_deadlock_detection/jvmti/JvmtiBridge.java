@@ -17,7 +17,7 @@ public class JvmtiBridge {
 
         System.out.println("JVMTI Bridge Initialized");
 
-        // initializeAgent();
+        initializeAgent();
     }
 
     public void shutdown() {

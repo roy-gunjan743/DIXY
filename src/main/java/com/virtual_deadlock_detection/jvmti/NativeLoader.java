@@ -5,13 +5,13 @@ public class NativeLoader {
     public void loadLibrary() {
 
         System.out.println("----------------------------------");
-        System.out.println("Preparing Native Library");
+        System.out.println("Loading JVMTI Native Library");
         System.out.println("----------------------------------");
 
+        System.loadLibrary(
+                JVMTIConstants.LIBRARY_NAME
+        );
 
-        System.out.println("Library Name : "
-                + JVMTIConstants.LIBRARY_NAME);
-
+        System.out.println("Native Library Loaded");
     }
-
 }
