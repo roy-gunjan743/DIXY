@@ -1,10 +1,12 @@
 package com.virtual_deadlock_detection.dto;
 
+import com.virtual_deadlock_detection.events.EventType;
+
 import java.time.LocalDateTime;
 
 public class EventDTO {
 
-    private String eventType;
+    private EventType eventType;
     private String threadName;
     private long threadId;
     private LocalDateTime timestamp;
@@ -12,7 +14,7 @@ public class EventDTO {
     public EventDTO() {
     }
 
-    public EventDTO(String eventType,
+    public EventDTO(EventType eventType,
                     String threadName,
                     long threadId,
                     LocalDateTime timestamp) {
@@ -23,11 +25,11 @@ public class EventDTO {
         this.timestamp = timestamp;
     }
 
-    public String getEventType() {
+    public EventType getEventType() {
         return eventType;
     }
 
-    public void setEventType(String eventType) {
+    public void setEventType(EventType eventType) {
         this.eventType = eventType;
     }
 

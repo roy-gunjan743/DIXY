@@ -13,27 +13,29 @@ public class JfrEventListener {
     public void registerEvents(RecordingStream stream) {
 
         stream.enable("jdk.ThreadStart");
+        stream.enable("jdk.ThreadEnd");
+        stream.enable("jdk.JavaMonitorEnter");
+        stream.enable("jdk.JavaMonitorWait");
+        stream.enable("jdk.ThreadPark");
 
+        // Thread Start
         stream.onEvent("jdk.ThreadStart", event -> {
 
             EventDTO dto = new EventDTO();
 
-            dto.setEventType("ThreadStart");
-            dto.setTimestamp(LocalDateTime.now());
-
-            // Temporary values until we integrate real thread metadata
-            dto.setThreadName("Unknown");
+            dto.setEventType(com.virtual_deadlock_detection.events.EventType.THREAD_START);
             dto.setThreadId(-1);
+            dto.setThreadName("Unknown");
+            dto.setTimestamp(LocalDateTime.now());
 
             collector.collect(dto);
 
             System.out.println("--------------------------------");
-            System.out.println("New Thread Started");
+            System.out.println("Thread Started");
             System.out.println(event);
 
         });
 
     }
 }
-
 
