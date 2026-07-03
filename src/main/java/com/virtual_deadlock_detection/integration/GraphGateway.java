@@ -17,8 +17,10 @@ public class GraphGateway {
     }
 
     public void processEvent(EventDTO event) {
-        // MATCHING YOUR ENUM: We care about LOCK_ACQUIRE and THREAD_BLOCKED
-        if (event.getEventType() == EventType.LOCK_ACQUIRE || event.getEventType() == EventType.THREAD_BLOCKED) {
+
+        // Handle only lock acquire and thread blocked events
+        if (event.getEventType() == EventType.LOCK_ACQUIRE
+                || event.getEventType() == EventType.THREAD_BLOCKED) {
 
             GraphNode threadNode = new GraphNode(
                     event.getThreadId(),
@@ -27,19 +29,27 @@ public class GraphGateway {
             );
 
             long lockAddress = event.getLockAddress();
+
             GraphNode lockNode = new GraphNode(
                     lockAddress,
                     NodeType.LOCK,
                     "Monitor-" + lockAddress
             );
 
-            GraphEdge edge = new GraphEdge(threadNode, lockNode, EdgeType.WAITS_FOR);
+            GraphEdge edge = new GraphEdge(
+                    threadNode,
+                    lockNode,
+                    EdgeType.WAITS_FOR
+            );
+
             graph.addEdge(edge);
 
-            System.out.println("🌉 Gateway mapped edge: " + threadNode.getLabel() + " WAITS_FOR " + lockNode.getLabel());
+            System.out.println("--------------------------------");
+            System.out.println("Forwarding Event To Graph");
+            System.out.println("Thread : " + event.getThreadName());
+            System.out.println("Lock   : " + lockAddress);
+            System.out.println("Edge   : WAITS_FOR");
+            System.out.println("--------------------------------");
         }
     }
-
-
-
 }
