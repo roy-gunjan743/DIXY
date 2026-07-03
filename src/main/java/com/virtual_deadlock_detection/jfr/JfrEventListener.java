@@ -33,6 +33,80 @@ public class JfrEventListener {
             System.out.println("--------------------------------");
             System.out.println("Thread Started");
             System.out.println(event);
+            System.out.println(event.getFields());
+
+
+        });
+
+        // Thread End
+        stream.onEvent("jdk.ThreadEnd", event -> {
+
+            EventDTO dto = new EventDTO();
+
+            dto.setEventType(com.virtual_deadlock_detection.events.EventType.THREAD_END);
+            dto.setThreadId(-1);
+            dto.setThreadName("Unknown");
+            dto.setTimestamp(LocalDateTime.now());
+
+            collector.collect(dto);
+
+            System.out.println("--------------------------------");
+            System.out.println("Thread Ended");
+            System.out.println(event);
+
+        });
+
+        // Thread Park
+        stream.onEvent("jdk.ThreadPark", event -> {
+
+            EventDTO dto = new EventDTO();
+
+            dto.setEventType(com.virtual_deadlock_detection.events.EventType.THREAD_PARKED);
+            dto.setThreadId(-1);
+            dto.setThreadName("Unknown");
+            dto.setTimestamp(LocalDateTime.now());
+
+            collector.collect(dto);
+
+            System.out.println("--------------------------------");
+            System.out.println("Thread Parked");
+            System.out.println(event);
+
+        });
+
+        // Java Monitor Enter
+        stream.onEvent("jdk.JavaMonitorEnter", event -> {
+
+            EventDTO dto = new EventDTO();
+
+            dto.setEventType(com.virtual_deadlock_detection.events.EventType.LOCK_ACQUIRE);
+            dto.setThreadId(-1);
+            dto.setThreadName("Unknown");
+            dto.setTimestamp(LocalDateTime.now());
+
+            collector.collect(dto);
+
+            System.out.println("--------------------------------");
+            System.out.println("Monitor Enter");
+            System.out.println(event);
+
+        });
+
+        // Java Monitor Wait
+        stream.onEvent("jdk.JavaMonitorWait", event -> {
+
+            EventDTO dto = new EventDTO();
+
+            dto.setEventType(com.virtual_deadlock_detection.events.EventType.THREAD_BLOCKED);
+            dto.setThreadId(-1);
+            dto.setThreadName("Unknown");
+            dto.setTimestamp(LocalDateTime.now());
+
+            collector.collect(dto);
+
+            System.out.println("--------------------------------");
+            System.out.println("Monitor Wait");
+            System.out.println(event);
 
         });
 
