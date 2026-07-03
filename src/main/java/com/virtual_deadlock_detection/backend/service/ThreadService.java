@@ -43,4 +43,21 @@ public class ThreadService {
     public void deleteThread(Long id) {
         threadRepository.deleteById(id);
     }
+
+
+    public ThreadEntity registerOrUpdateThread(ThreadEntity thread) {
+
+        return threadRepository.findByThreadId(thread.getThreadId())
+                .map(existing -> {
+
+                    existing.setThreadName(thread.getThreadName());
+                    existing.setState(thread.getState());
+                    existing.setCarrierThread(thread.getCarrierThread());
+
+                    return threadRepository.save(existing);
+
+                })
+                .orElseGet(() -> threadRepository.save(thread));
+    }
+
 }

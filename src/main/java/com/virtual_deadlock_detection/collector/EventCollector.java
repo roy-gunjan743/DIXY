@@ -9,10 +9,10 @@ public class EventCollector {
 
     public void collect(EventDTO eventDTO) {
 
+        System.out.println("--------------------------------");
         System.out.println("Event Collected");
+        System.out.println("--------------------------------");
 
         sender.send(eventDTO);
-
     }
-
 }

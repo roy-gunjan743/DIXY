@@ -6,10 +6,9 @@ import com.virtual_deadlock_detection.integration.GraphGateway;
 
 public class EventSender {
 
-    private final WaitForGraph waitForGraph = new WaitForGraph();
+    private static final WaitForGraph GRAPH = new WaitForGraph();
 
-    private final GraphGateway graphGateway =
-            new GraphGateway(waitForGraph);
+    private final GraphGateway graphGateway = new GraphGateway(GRAPH);
 
     public void send(EventDTO eventDTO) {
 
@@ -20,5 +19,9 @@ public class EventSender {
         System.out.println("--------------------------------");
 
         graphGateway.processEvent(eventDTO);
+    }
+
+    public static WaitForGraph getGraph() {
+        return GRAPH;
     }
 }

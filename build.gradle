@@ -39,6 +39,17 @@ dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
 
 }
+jar {
+    enabled = true
+
+    manifest {
+        attributes(
+                "Premain-Class": "com.virtual_deadlock_detection.agent.VirtualDeadlockAgent",
+                "Can-Redefine-Classes": "true",
+                "Can-Retransform-Classes": "true"
+        )
+    }
+}
 
 tasks.named('test') {
     useJUnitPlatform()

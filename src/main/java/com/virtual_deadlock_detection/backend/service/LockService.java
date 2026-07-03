@@ -36,4 +36,17 @@ public class LockService {
     public void deleteLock(Long id) {
         lockRepository.deleteById(id);
     }
+    public LockEntity registerOrUpdateLock(LockEntity lock) {
+
+        return lockRepository.findByLockId(lock.getLockId())
+                .map(existing -> {
+
+                    existing.setLockType(lock.getLockType());
+                    existing.setOwnerThread(lock.getOwnerThread());
+
+                    return lockRepository.save(existing);
+
+                })
+                .orElseGet(() -> lockRepository.save(lock));
+    }
 }

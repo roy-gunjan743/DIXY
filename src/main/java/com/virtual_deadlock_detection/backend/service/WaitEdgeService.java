@@ -1,11 +1,12 @@
 package com.virtual_deadlock_detection.backend.service;
 
+import com.virtual_deadlock_detection.backend.entity.LockEntity;
+import com.virtual_deadlock_detection.backend.entity.ThreadEntity;
 import com.virtual_deadlock_detection.backend.entity.WaitEdgeEntity;
 import com.virtual_deadlock_detection.backend.repository.WaitEdgeRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.Optional;
 
 @Service
 public class WaitEdgeService {
@@ -16,19 +17,29 @@ public class WaitEdgeService {
         this.waitEdgeRepository = waitEdgeRepository;
     }
 
-    public WaitEdgeEntity saveWaitEdge(WaitEdgeEntity waitEdge) {
-        return waitEdgeRepository.save(waitEdge);
+    public WaitEdgeEntity createWaitEdge(
+            ThreadEntity thread,
+            LockEntity lock) {
+
+        return waitEdgeRepository
+                .findByWaitingThreadAndLock(thread, lock)
+                .orElseGet(() -> {
+
+                    WaitEdgeEntity edge = new WaitEdgeEntity();
+
+                    edge.setWaitingThread(thread);
+                    edge.setLock(lock);
+
+                    return waitEdgeRepository.save(edge);
+
+                });
     }
 
-    public List<WaitEdgeEntity> getAllWaitEdges() {
+    public List<WaitEdgeEntity> getAllEdges() {
         return waitEdgeRepository.findAll();
     }
 
-    public Optional<WaitEdgeEntity> getWaitEdge(Long id) {
-        return waitEdgeRepository.findById(id);
-    }
-
-    public void deleteWaitEdge(Long id) {
+    public void deleteEdge(Long id) {
         waitEdgeRepository.deleteById(id);
     }
 }

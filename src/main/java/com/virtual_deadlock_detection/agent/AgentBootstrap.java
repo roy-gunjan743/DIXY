@@ -1,11 +1,47 @@
 package com.virtual_deadlock_detection.agent;
 
+import com.virtual_deadlock_detection.collector.EventCollector;
+import com.virtual_deadlock_detection.graph.detector.DeadlockDetector;
+import com.virtual_deadlock_detection.graph.engine.GraphEngine;
+import com.virtual_deadlock_detection.graph.registry.WaitForGraph;
+import com.virtual_deadlock_detection.sender.EventSender;
+
 public class AgentBootstrap {
 
-    public void initialize() {
+    private final EventCollector eventCollector;
 
-        System.out.println("Initializing Agent Components...");
+    private final DeadlockDetector detector;
 
+    private final GraphEngine graphEngine;
+
+    public AgentBootstrap() {
+
+        System.out.println("=================================");
+        System.out.println("Initializing Agent Components");
+        System.out.println("=================================");
+
+        eventCollector = new EventCollector();
+
+        detector = new DeadlockDetector();
+
+        graphEngine = new GraphEngine(EventSender.getGraph());
+
+        System.out.println("Agent Components Initialized Successfully");
     }
 
+    public EventCollector getEventCollector() {
+        return eventCollector;
+    }
+
+    public WaitForGraph getGraph() {
+        return EventSender.getGraph();
+    }
+
+    public DeadlockDetector getDetector() {
+        return detector;
+    }
+
+    public GraphEngine getGraphEngine() {
+        return graphEngine;
+    }
 }

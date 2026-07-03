@@ -1,5 +1,7 @@
 package com.virtual_deadlock_detection.backend.controller;
 
+import com.virtual_deadlock_detection.backend.dto.TelemetryRequest;
+import com.virtual_deadlock_detection.backend.dto.TelemetryResponse;
 import com.virtual_deadlock_detection.backend.service.TelemetryService;
 import org.springframework.web.bind.annotation.*;
 
@@ -14,10 +16,9 @@ public class TelemetryController {
     }
 
     @PostMapping
-    public String receiveTelemetry() {
+    public TelemetryResponse receiveTelemetry(
+            @RequestBody TelemetryRequest request) {
 
-        telemetryService.processTelemetry();
-
-        return "Telemetry received successfully";
+        return telemetryService.processTelemetry(request);
     }
 }
