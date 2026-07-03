@@ -6,8 +6,9 @@ import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
 
-public interface LockRepository extends JpaRepository<LockRepository,String>{
+@Repository
+public interface LockRepository extends JpaRepository<LockEntity, Long> {
 
+    Optional<LockEntity> findByLockId(String lockId);
 
-    Optional<LockRepository> findByLockId(String lockID);
 }

@@ -9,6 +9,6 @@ import java.util.Optional;
 @Repository
 public interface ThreadRepository extends JpaRepository<ThreadEntity,Long> {
 
-    Optional<ThreadEntity> findByThreadID(Long threadID);
+    Optional<ThreadEntity> findByThreadId(Long threadID);
     Optional<ThreadEntity> findByThreadName(String threadName);
 }
