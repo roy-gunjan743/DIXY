@@ -8,7 +8,8 @@ public class EventSender {
 
     private static final WaitForGraph GRAPH = new WaitForGraph();
 
-    private final GraphGateway graphGateway = new GraphGateway(GRAPH);
+    private final GraphGateway graphGateway =
+            new GraphGateway(GRAPH);
 
     public void send(EventDTO eventDTO) {
 
