@@ -2,6 +2,8 @@ package com.virtual_deadlock_detection.jfr;
 
 import com.virtual_deadlock_detection.collector.EventCollector;
 import com.virtual_deadlock_detection.dto.EventDTO;
+import com.virtual_deadlock_detection.events.EventType;
+import jdk.jfr.consumer.RecordedThread;
 import jdk.jfr.consumer.RecordingStream;
 
 import java.time.LocalDateTime;
@@ -18,98 +20,90 @@ public class JfrEventListener {
         stream.enable("jdk.JavaMonitorWait");
         stream.enable("jdk.ThreadPark");
 
-        // Thread Start
+        // 1. Thread Start
         stream.onEvent("jdk.ThreadStart", event -> {
-
             EventDTO dto = new EventDTO();
+            dto.setEventType(EventType.THREAD_START);
 
-            dto.setEventType(com.virtual_deadlock_detection.events.EventType.THREAD_START);
-            dto.setThreadId(-1);
-            dto.setThreadName("Unknown");
+            RecordedThread thread = event.getThread("thread");
+            if (thread != null) {
+                dto.setThreadId(thread.getJavaThreadId());
+                dto.setThreadName(thread.getJavaName());
+            }
             dto.setTimestamp(LocalDateTime.now());
-
             collector.collect(dto);
-
-            System.out.println("--------------------------------");
-            System.out.println("Thread Started");
-            System.out.println(event);
-            System.out.println(event.getFields());
-
-
         });
 
-        // Thread End
+        // 2. Thread End
         stream.onEvent("jdk.ThreadEnd", event -> {
-
             EventDTO dto = new EventDTO();
+            dto.setEventType(EventType.THREAD_END);
 
-            dto.setEventType(com.virtual_deadlock_detection.events.EventType.THREAD_END);
-            dto.setThreadId(-1);
-            dto.setThreadName("Unknown");
+            RecordedThread thread = event.getThread();
+            if (thread != null) {
+                dto.setThreadId(thread.getJavaThreadId());
+                dto.setThreadName(thread.getJavaName());
+            }
             dto.setTimestamp(LocalDateTime.now());
-
             collector.collect(dto);
-
-            System.out.println("--------------------------------");
-            System.out.println("Thread Ended");
-            System.out.println(event);
-
         });
 
-        // Thread Park
+        // 3. Thread Park (Virtual Thread specific blocking)
         stream.onEvent("jdk.ThreadPark", event -> {
-
             EventDTO dto = new EventDTO();
+            dto.setEventType(EventType.THREAD_PARKED);
 
-            dto.setEventType(com.virtual_deadlock_detection.events.EventType.THREAD_PARKED);
-            dto.setThreadId(-1);
-            dto.setThreadName("Unknown");
+            RecordedThread thread = event.getThread();
+            if (thread != null) {
+                dto.setThreadId(thread.getJavaThreadId());
+                dto.setThreadName(thread.getJavaName());
+            }
+
+            if (event.hasField("address")) {
+                dto.setLockAddress(event.getLong("address"));
+            }
             dto.setTimestamp(LocalDateTime.now());
-
             collector.collect(dto);
-
-            System.out.println("--------------------------------");
-            System.out.println("Thread Parked");
-            System.out.println(event);
-
         });
 
-        // Java Monitor Enter
+        // 4. Java Monitor Enter (Mapped to your LOCK_ACQUIRE)
         stream.onEvent("jdk.JavaMonitorEnter", event -> {
-
             EventDTO dto = new EventDTO();
+            dto.setEventType(EventType.LOCK_ACQUIRE); // MATCHES YOUR ENUM
 
-            dto.setEventType(com.virtual_deadlock_detection.events.EventType.LOCK_ACQUIRE);
-            dto.setThreadId(-1);
-            dto.setThreadName("Unknown");
+            RecordedThread thread = event.getThread();
+            if (thread != null) {
+                dto.setThreadId(thread.getJavaThreadId());
+                dto.setThreadName(thread.getJavaName());
+            }
+
+            if (event.hasField("address")) {
+                dto.setLockAddress(event.getLong("address")); // REAL LOCK ADDRESS
+            }
+
             dto.setTimestamp(LocalDateTime.now());
-
             collector.collect(dto);
 
-            System.out.println("--------------------------------");
-            System.out.println("Monitor Enter");
-            System.out.println(event);
-
+            System.out.println("🚨 JFR CAUGHT LOCK WAIT: " + dto.getThreadName() + " waiting on lock " + dto.getLockAddress());
         });
 
-        // Java Monitor Wait
+        // 5. Java Monitor Wait (Mapped to your THREAD_BLOCKED)
         stream.onEvent("jdk.JavaMonitorWait", event -> {
-
             EventDTO dto = new EventDTO();
+            dto.setEventType(EventType.THREAD_BLOCKED); // MATCHES YOUR ENUM
 
-            dto.setEventType(com.virtual_deadlock_detection.events.EventType.THREAD_BLOCKED);
-            dto.setThreadId(-1);
-            dto.setThreadName("Unknown");
+            RecordedThread thread = event.getThread();
+            if (thread != null) {
+                dto.setThreadId(thread.getJavaThreadId());
+                dto.setThreadName(thread.getJavaName());
+            }
+
+            if (event.hasField("address")) {
+                dto.setLockAddress(event.getLong("address"));
+            }
+
             dto.setTimestamp(LocalDateTime.now());
-
             collector.collect(dto);
-
-            System.out.println("--------------------------------");
-            System.out.println("Monitor Wait");
-            System.out.println(event);
-
         });
-
     }
 }
-
