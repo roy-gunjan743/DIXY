@@ -20,6 +20,7 @@ public class VirtualDeadlockAgent {
         recordingManager.startRecording();
         JvmtiBridge jvmtiBridge = new JvmtiBridge();
         jvmtiBridge.initialize();
+        System.out.println("Agent Initialization Completed");
 
     }
 
