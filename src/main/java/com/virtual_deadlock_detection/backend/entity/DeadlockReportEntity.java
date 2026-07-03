@@ -31,6 +31,8 @@ public class DeadlockReportEntity {
             orphanRemoval = true)
     private List<DeadlockReportEntity>nodes=new ArrayList<>();
 
+
+
     @PrePersist
     public void prePersist(){
         detectedAt = LocalDateTime.now();
