@@ -7,6 +7,7 @@ public enum EventType {
     THREAD_BLOCKED,
     THREAD_PARKED,
     LOCK_ACQUIRE,
-    LOCK_RELEASE
+    LOCK_RELEASE,
+    LOCK_OWNED
 
 }

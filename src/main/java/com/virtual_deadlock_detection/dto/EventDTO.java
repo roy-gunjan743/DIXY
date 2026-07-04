@@ -7,47 +7,73 @@ import java.time.LocalDateTime;
 public class EventDTO {
 
     private EventType eventType;
-    private String threadName;
+
     private long threadId;
-    private LocalDateTime timestamp;
-    private long lockId;
 
-    private String lockName;
+    private String threadName;
 
-    // 1. ADD THIS NEW VARIABLE
     private long lockAddress;
 
-    public EventDTO() {
+    // NEW
+    private long ownerThreadId;
+
+    private String ownerThreadName;
+
+    private LocalDateTime timestamp;
+
+    public EventType getEventType() {
+        return eventType;
     }
 
-    public EventDTO(EventType eventType,
-                    String threadName,
-                    long threadId,
-                    LocalDateTime timestamp) {
-
+    public void setEventType(EventType eventType) {
         this.eventType = eventType;
-        this.threadName = threadName;
-        this.threadId = threadId;
-        this.timestamp = timestamp;
     }
 
-    // --- Keep all your existing getters and setters here ---
+    public long getThreadId() {
+        return threadId;
+    }
 
-    public EventType getEventType() { return eventType; }
-    public void setEventType(EventType eventType) { this.eventType = eventType; }
-    public String getThreadName() { return threadName; }
-    public void setThreadName(String threadName) { this.threadName = threadName; }
-    public long getThreadId() { return threadId; }
-    public void setThreadId(long threadId) { this.threadId = threadId; }
-    public LocalDateTime getTimestamp() { return timestamp; }
-    public void setTimestamp(LocalDateTime timestamp) { this.timestamp = timestamp; }
+    public void setThreadId(long threadId) {
+        this.threadId = threadId;
+    }
 
-    // 2. ADD THESE TWO NEW METHODS AT THE VERY BOTTOM
+    public String getThreadName() {
+        return threadName;
+    }
+
+    public void setThreadName(String threadName) {
+        this.threadName = threadName;
+    }
+
     public long getLockAddress() {
         return lockAddress;
     }
 
     public void setLockAddress(long lockAddress) {
         this.lockAddress = lockAddress;
+    }
+
+    public long getOwnerThreadId() {
+        return ownerThreadId;
+    }
+
+    public void setOwnerThreadId(long ownerThreadId) {
+        this.ownerThreadId = ownerThreadId;
+    }
+
+    public String getOwnerThreadName() {
+        return ownerThreadName;
+    }
+
+    public void setOwnerThreadName(String ownerThreadName) {
+        this.ownerThreadName = ownerThreadName;
+    }
+
+    public LocalDateTime getTimestamp() {
+        return timestamp;
+    }
+
+    public void setTimestamp(LocalDateTime timestamp) {
+        this.timestamp = timestamp;
     }
 }

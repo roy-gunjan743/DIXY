@@ -1,6 +1,7 @@
 package com.virtual_deadlock_detection.integration;
 
 import com.virtual_deadlock_detection.dto.EventDTO;
+import com.virtual_deadlock_detection.events.EventType;
 import com.virtual_deadlock_detection.graph.detector.DeadlockDetector;
 import com.virtual_deadlock_detection.graph.model.DeadlockCycle;
 import com.virtual_deadlock_detection.graph.model.EdgeType;
@@ -13,74 +14,96 @@ import java.util.List;
 
 public class GraphGateway {
 
-    private final WaitForGraph waitForGraph;
+    private final WaitForGraph graph;
     private final DeadlockDetector detector = new DeadlockDetector();
 
-    public GraphGateway(WaitForGraph waitForGraph) {
-        this.waitForGraph = waitForGraph;
+    public GraphGateway(WaitForGraph graph) {
+        this.graph = graph;
     }
 
-    public void processEvent(EventDTO eventDTO) {
-
-        System.out.println("================================");
-        System.out.println("Graph Updated");
-        System.out.println("================================");
+    public void processEvent(EventDTO event) {
 
         GraphNode threadNode = new GraphNode(
-                eventDTO.getThreadId(),
+                event.getThreadId(),
                 NodeType.VIRTUAL_THREAD,
-                eventDTO.getThreadName()
+                event.getThreadName()
         );
 
-        switch (eventDTO.getEventType()) {
+        GraphNode lockNode = new GraphNode(
+                event.getLockAddress(),
+                NodeType.LOCK,
+                "Monitor-" + event.getLockAddress()
+        );
+
+        graph.addNode(threadNode);
+        graph.addNode(lockNode);
+
+        switch (event.getEventType()) {
 
             case THREAD_START -> {
 
-                waitForGraph.addNode(threadNode);
-
-                System.out.println("Virtual Thread Added");
+                System.out.println("Thread Started : "
+                        + threadNode.getLabel());
             }
 
             case THREAD_END -> {
 
-                System.out.println("Thread End Event Received");
-
-                // Node removal can be implemented later.
-            }
-
-            case THREAD_PARKED -> {
-
-                System.out.println("Thread Parked : "
+                System.out.println("Thread Ended : "
                         + threadNode.getLabel());
             }
 
             case LOCK_ACQUIRE,
                  THREAD_BLOCKED -> {
 
-                GraphNode lockNode = new GraphNode(
-                        eventDTO.getLockAddress(),
-                        NodeType.LOCK,
-                        "Monitor-" + eventDTO.getLockAddress()
+                GraphEdge waitEdge =
+                        new GraphEdge(
+                                threadNode,
+                                lockNode,
+                                EdgeType.WAITS_FOR
+                        );
+
+                graph.addEdge(waitEdge);
+
+                System.out.println(waitEdge);
+            }
+
+            case LOCK_OWNED -> {
+
+                GraphNode ownerNode =
+                        new GraphNode(
+                                event.getOwnerThreadId(),
+                                NodeType.VIRTUAL_THREAD,
+                                event.getOwnerThreadName()
+                        );
+
+                graph.addNode(ownerNode);
+
+                GraphEdge holdEdge =
+                        new GraphEdge(
+                                ownerNode,
+                                lockNode,
+                                EdgeType.HOLDS
+                        );
+
+                graph.addEdge(holdEdge);
+
+                System.out.println(holdEdge);
+            }
+
+            case LOCK_RELEASE -> {
+
+                System.out.println(
+                        "Lock Released : "
+                                + lockNode.getLabel()
                 );
-
-                waitForGraph.addNode(threadNode);
-                waitForGraph.addNode(lockNode);
-
-                GraphEdge edge = new GraphEdge(
-                        threadNode,
-                        lockNode,
-                        EdgeType.WAITS_FOR
-                );
-
-                waitForGraph.addEdge(edge);
-
-                System.out.println(edge);
             }
 
             default -> {
 
-                System.out.println("Unsupported Event : "
-                        + eventDTO.getEventType());
+                System.out.println(
+                        "Unhandled Event : "
+                                + event.getEventType()
+                );
             }
         }
 
@@ -89,20 +112,25 @@ public class GraphGateway {
 
     private void detectDeadlocks() {
 
-        List<DeadlockCycle> cycles = detector.detect(waitForGraph);
+        List<DeadlockCycle> cycles =
+                detector.detect(graph);
 
         if (cycles.isEmpty()) {
 
+            System.out.println();
+            System.out.println("--------------------------------");
             System.out.println("No Deadlock");
+            System.out.println("--------------------------------");
 
         } else {
 
             System.out.println();
-            System.out.println("======================================");
-            System.out.println("      DEADLOCK DETECTED");
-            System.out.println("======================================");
+            System.out.println("================================");
+            System.out.println(" DEADLOCK DETECTED ");
+            System.out.println("================================");
 
             for (DeadlockCycle cycle : cycles) {
+
                 System.out.println(cycle);
             }
         }

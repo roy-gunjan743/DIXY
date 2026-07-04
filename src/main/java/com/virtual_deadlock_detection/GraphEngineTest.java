@@ -61,7 +61,7 @@ public class GraphEngineTest {
 
         Thread vThread1 = Thread.ofVirtual().name("vThread-1").start(() -> {
             lockA.lock();
-            graph.addEdge(new GraphEdge(nodeLockA, nodeThread1, EdgeType.HELD_BY));
+            graph.addEdge(new GraphEdge(nodeLockA, nodeThread1, EdgeType.HOLDS));
             System.out.println(" vThread-1 acquired Lock A");
 
             sleepBriefly();
@@ -73,7 +73,7 @@ public class GraphEngineTest {
 
         Thread vThread2 = Thread.ofVirtual().name("vThread-2").start(() -> {
             lockB.lock();
-            graph.addEdge(new GraphEdge(nodeLockB, nodeThread2, EdgeType.HELD_BY));
+            graph.addEdge(new GraphEdge(nodeLockB, nodeThread2, EdgeType.HOLDS));
             System.out.println(" vThread-2 acquired Lock B");
 
             sleepBriefly();
