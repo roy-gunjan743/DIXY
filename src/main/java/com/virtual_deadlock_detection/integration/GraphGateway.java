@@ -1,7 +1,6 @@
 package com.virtual_deadlock_detection.integration;
 
 import com.virtual_deadlock_detection.dto.EventDTO;
-import com.virtual_deadlock_detection.events.EventType;
 import com.virtual_deadlock_detection.graph.detector.DeadlockDetector;
 import com.virtual_deadlock_detection.graph.model.DeadlockCycle;
 import com.virtual_deadlock_detection.graph.model.EdgeType;
@@ -45,7 +44,14 @@ public class GraphGateway {
             case THREAD_END -> {
 
                 System.out.println("Thread End Event Received");
+
                 // Node removal can be implemented later.
+            }
+
+            case THREAD_PARKED -> {
+
+                System.out.println("Thread Parked : "
+                        + threadNode.getLabel());
             }
 
             case LOCK_ACQUIRE,
@@ -83,8 +89,7 @@ public class GraphGateway {
 
     private void detectDeadlocks() {
 
-        List<DeadlockCycle> cycles =
-                detector.detect(waitForGraph);
+        List<DeadlockCycle> cycles = detector.detect(waitForGraph);
 
         if (cycles.isEmpty()) {
 
@@ -94,11 +99,10 @@ public class GraphGateway {
 
             System.out.println();
             System.out.println("======================================");
-            System.out.println(" DEADLOCK DETECTED ");
+            System.out.println("      DEADLOCK DETECTED");
             System.out.println("======================================");
 
             for (DeadlockCycle cycle : cycles) {
-
                 System.out.println(cycle);
             }
         }

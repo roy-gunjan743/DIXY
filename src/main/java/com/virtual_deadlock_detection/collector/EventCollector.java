@@ -11,6 +11,8 @@ public class EventCollector {
 
         System.out.println("--------------------------------");
         System.out.println("Event Collected");
+        System.out.println("Event Type : " + eventDTO.getEventType());
+        System.out.println("Thread     : " + eventDTO.getThreadName());
         System.out.println("--------------------------------");
 
         sender.send(eventDTO);
