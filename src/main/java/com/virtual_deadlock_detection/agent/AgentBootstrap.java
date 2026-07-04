@@ -24,7 +24,7 @@ public class AgentBootstrap {
 
         detector = new DeadlockDetector();
 
-        graphEngine = new GraphEngine(EventSender.getGraph());
+        graphEngine = RuntimeContext.engine();
 
         System.out.println("Agent Components Initialized Successfully");
     }

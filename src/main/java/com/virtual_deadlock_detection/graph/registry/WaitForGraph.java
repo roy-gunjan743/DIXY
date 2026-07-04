@@ -8,6 +8,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static org.apache.logging.log4j.MarkerManager.clear;
+
 public class WaitForGraph {
 
     private final Map<GraphNode, Set<GraphEdge>> adjacencyList =
@@ -51,5 +53,14 @@ public class WaitForGraph {
         return Collections.unmodifiableSet(
                 adjacencyList.keySet()
         );
+    }
+    public  void rebuild(Set<GraphEdge> edges) {
+
+        clear();
+
+        for (GraphEdge edge : edges) {
+            addEdge(edge);
+        }
+
     }
 }
