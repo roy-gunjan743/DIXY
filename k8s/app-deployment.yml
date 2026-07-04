@@ -13,10 +13,12 @@ spec:
       labels:
         app: vdd-app
     spec:
+      imagePullSecrets:
+        - name: dockerhub-secret
       containers:
         - name: app
-          image: patent_26-app:latest
-          imagePullPolicy: Never
+          image: z0ker69/patent_26-app:latest
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
           env:
