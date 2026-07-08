@@ -8,6 +8,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/threads")
+@CrossOrigin(origins = "*")
 public class ThreadController {
 
     private final ThreadService threadService;

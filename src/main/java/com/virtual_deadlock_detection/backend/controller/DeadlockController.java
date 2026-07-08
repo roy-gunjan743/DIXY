@@ -10,6 +10,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/deadlocks")
+@CrossOrigin(origins = "*")
 public class DeadlockController {
 
     private final DeadlockService deadlockService;

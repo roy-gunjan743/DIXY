@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/telemetry")
+@CrossOrigin(origins = "*")
 public class TelemetryController {
 
     private final TelemetryService telemetryService;

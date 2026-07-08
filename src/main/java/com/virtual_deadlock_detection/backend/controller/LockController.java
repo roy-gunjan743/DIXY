@@ -8,6 +8,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/locks")
+@CrossOrigin(origins = "*")
 public class LockController {
 
     private final LockService lockService;

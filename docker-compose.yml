@@ -7,7 +7,7 @@ services:
       MYSQL_ROOT_PASSWORD: gupi@1234
       MYSQL_DATABASE: virtual_deadlock_detection
     ports:
-      - "3306:3306"
+      - "3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
@@ -56,12 +56,14 @@ services:
       - app
 
   grafana:
-      image: grafana/grafana:latest
+      image: grafana/grafana:9.5.15
       container_name: vdd-grafana
       restart: unless-stopped
+      user: "0"
       environment:
         GF_SECURITY_ADMIN_USER: admin
         GF_SECURITY_ADMIN_PASSWORD: admin
+        GF_SECURITY_ALLOW_EMBEDDING: "true"
       ports:
         - "3000:3000"
       volumes:

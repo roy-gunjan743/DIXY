@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/internal")
+@CrossOrigin(origins = "*")
 public class InternalDeadlockController {
 
     private final AgentDeadlockService service;
