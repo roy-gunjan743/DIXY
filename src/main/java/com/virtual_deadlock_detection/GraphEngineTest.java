@@ -124,3 +124,5 @@ public class GraphEngineTest {
         try { Thread.sleep(500); } catch (InterruptedException ignored) {}
     }
 }
+
+//https://github.com/YaSuenag/maven-jlink-plugin.git
