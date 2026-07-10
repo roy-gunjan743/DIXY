@@ -1,8 +1,8 @@
-package com.virtual_deadlock_detection.sender;
+package com.virtual_deadlock_detection.LockDetectionAgent.sender;
 
-import com.virtual_deadlock_detection.dto.EventDTO;
+import com.virtual_deadlock_detection.LockDetectionAgent.dto.EventDTO;
 import com.virtual_deadlock_detection.graph.registry.WaitForGraph;
-import com.virtual_deadlock_detection.integration.GraphGateway;
+import com.virtual_deadlock_detection.LockDetectionAgent.integration.GraphGateway;
 
 public class EventSender {
 

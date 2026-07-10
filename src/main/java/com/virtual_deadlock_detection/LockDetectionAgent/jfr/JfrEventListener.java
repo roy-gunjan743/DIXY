@@ -1,8 +1,8 @@
-package com.virtual_deadlock_detection.jfr;
+package com.virtual_deadlock_detection.LockDetectionAgent.jfr;
 
-import com.virtual_deadlock_detection.collector.EventCollector;
-import com.virtual_deadlock_detection.dto.EventDTO;
-import com.virtual_deadlock_detection.events.EventType;
+import com.virtual_deadlock_detection.LockDetectionAgent.collector.EventCollector;
+import com.virtual_deadlock_detection.LockDetectionAgent.dto.EventDTO;
+import com.virtual_deadlock_detection.LockDetectionAgent.events.EventType;
 import jdk.jfr.consumer.RecordedThread;
 import jdk.jfr.consumer.RecordingStream;
 

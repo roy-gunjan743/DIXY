@@ -1,4 +1,4 @@
-package com.virtual_deadlock_detection.agent;
+package com.virtual_deadlock_detection.LockDetectionAgent.agent;
 
 public class AgentConfig {
 

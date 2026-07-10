@@ -1,4 +1,4 @@
-package com.virtual_deadlock_detection.jfr;
+package com.virtual_deadlock_detection.LockDetectionAgent.jfr;
 
 import jdk.jfr.consumer.RecordingStream;
 

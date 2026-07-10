@@ -1,6 +1,6 @@
-package com.virtual_deadlock_detection.integration;
+package com.virtual_deadlock_detection.LockDetectionAgent.integration;
 
-import com.virtual_deadlock_detection.dto.EventDTO;
+import com.virtual_deadlock_detection.LockDetectionAgent.dto.EventDTO;
 import com.virtual_deadlock_detection.graph.detector.DeadlockDetector;
 import com.virtual_deadlock_detection.graph.model.DeadlockCycle;
 import com.virtual_deadlock_detection.graph.model.EdgeType;

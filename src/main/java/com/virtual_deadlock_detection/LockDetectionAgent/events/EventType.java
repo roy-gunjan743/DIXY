@@ -1,4 +1,4 @@
-package com.virtual_deadlock_detection.events;
+package com.virtual_deadlock_detection.LockDetectionAgent.events;
 
 public enum EventType {
 

@@ -1,10 +1,10 @@
-package com.virtual_deadlock_detection.agent;
+package com.virtual_deadlock_detection.LockDetectionAgent.agent;
 
-import com.virtual_deadlock_detection.collector.EventCollector;
+import com.virtual_deadlock_detection.LockDetectionAgent.collector.EventCollector;
 import com.virtual_deadlock_detection.graph.detector.DeadlockDetector;
 import com.virtual_deadlock_detection.graph.engine.GraphEngine;
 import com.virtual_deadlock_detection.graph.registry.WaitForGraph;
-import com.virtual_deadlock_detection.sender.EventSender;
+import com.virtual_deadlock_detection.LockDetectionAgent.sender.EventSender;
 
 public class AgentBootstrap {
 

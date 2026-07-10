@@ -1,7 +1,7 @@
-package com.virtual_deadlock_detection.collector;
+package com.virtual_deadlock_detection.LockDetectionAgent.collector;
 
-import com.virtual_deadlock_detection.dto.EventDTO;
-import com.virtual_deadlock_detection.sender.EventSender;
+import com.virtual_deadlock_detection.LockDetectionAgent.dto.EventDTO;
+import com.virtual_deadlock_detection.LockDetectionAgent.sender.EventSender;
 
 public class EventCollector {
 

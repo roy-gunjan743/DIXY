@@ -1,4 +1,4 @@
-package com.virtual_deadlock_detection.jvmti;
+package com.virtual_deadlock_detection.LockDetectionAgent.jvmti;
 
 public class NativeLoader {
 

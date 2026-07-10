@@ -1,6 +1,6 @@
-package com.virtual_deadlock_detection.dto;
+package com.virtual_deadlock_detection.LockDetectionAgent.dto;
 
-import com.virtual_deadlock_detection.events.EventType;
+import com.virtual_deadlock_detection.LockDetectionAgent.events.EventType;
 
 import java.time.LocalDateTime;
 

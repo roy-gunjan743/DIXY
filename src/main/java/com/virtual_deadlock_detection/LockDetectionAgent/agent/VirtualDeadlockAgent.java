@@ -1,8 +1,8 @@
-package com.virtual_deadlock_detection.agent;
+package com.virtual_deadlock_detection.LockDetectionAgent.agent;
 
-import com.virtual_deadlock_detection.collector.EventCollector;
-import com.virtual_deadlock_detection.jfr.RecordingManager;
-import com.virtual_deadlock_detection.jvmti.JvmtiBridge;
+import com.virtual_deadlock_detection.LockDetectionAgent.collector.EventCollector;
+import com.virtual_deadlock_detection.LockDetectionAgent.jfr.RecordingManager;
+import com.virtual_deadlock_detection.LockDetectionAgent.jvmti.JvmtiBridge;
 
 import java.lang.instrument.Instrumentation;
 

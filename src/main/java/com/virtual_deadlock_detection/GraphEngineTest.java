@@ -1,6 +1,6 @@
 package com.virtual_deadlock_detection;
 
-import com.virtual_deadlock_detection.agent.AgentConfig;
+import com.virtual_deadlock_detection.LockDetectionAgent.agent.AgentConfig;
 import com.virtual_deadlock_detection.graph.detector.DeadlockDetector;
 import com.virtual_deadlock_detection.graph.model.DeadlockCycle;
 import com.virtual_deadlock_detection.graph.model.EdgeType;
@@ -10,8 +10,8 @@ import com.virtual_deadlock_detection.graph.model.NodeType;
 import com.virtual_deadlock_detection.graph.registry.WaitForGraph;
 import com.virtual_deadlock_detection.graph.report.DeadlockReport;
 import com.virtual_deadlock_detection.graph.report.DeadlockReportGenerator;
-import com.virtual_deadlock_detection.jfr.RecordingManager;
-import com.virtual_deadlock_detection.jvmti.JvmtiBridge;
+import com.virtual_deadlock_detection.LockDetectionAgent.jfr.RecordingManager;
+import com.virtual_deadlock_detection.LockDetectionAgent.jvmti.JvmtiBridge;
 
 import java.util.HashMap;
 import java.util.List;

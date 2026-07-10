@@ -1,4 +1,4 @@
-package com.virtual_deadlock_detection.agent;
+package com.virtual_deadlock_detection.LockDetectionAgent.agent;
 
 import com.virtual_deadlock_detection.graph.detector.DeadlockDetector;
 import com.virtual_deadlock_detection.graph.engine.GraphEngine;
