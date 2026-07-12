@@ -16,7 +16,13 @@ public class EventSender {
         System.out.println("--------------------------------");
         System.out.println("Sending Event To Graph Engine");
         System.out.println("Event Type : " + eventDTO.getEventType());
-        System.out.println("Thread Name : " + eventDTO.getThreadName());
+
+        if (eventDTO.getOwnerThreadName() != null) {
+            System.out.println("Owner Thread : " + eventDTO.getOwnerThreadName());
+        } else {
+            System.out.println("Thread Name : " + eventDTO.getThreadName());
+        }
+
         System.out.println("--------------------------------");
 
         graphGateway.processEvent(eventDTO);
