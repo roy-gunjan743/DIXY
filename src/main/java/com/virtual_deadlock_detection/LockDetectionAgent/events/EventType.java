@@ -9,5 +9,4 @@ public enum EventType {
     LOCK_ACQUIRE,
     LOCK_RELEASE,
     LOCK_OWNED
-
 }

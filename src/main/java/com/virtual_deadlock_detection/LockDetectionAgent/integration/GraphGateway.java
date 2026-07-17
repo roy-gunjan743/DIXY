@@ -76,6 +76,53 @@ public class GraphGateway {
 
                 System.out.println(edge);
             }
+            case LOCK_OWNED -> {
+
+                GraphNode waitingThread = new GraphNode(
+                        eventDTO.getThreadId(),
+                        NodeType.VIRTUAL_THREAD,
+                        eventDTO.getThreadName()
+                );
+
+                GraphNode ownerThread = new GraphNode(
+                        eventDTO.getOwnerThreadId(),
+                        NodeType.VIRTUAL_THREAD,
+                        eventDTO.getOwnerThreadName()
+                );
+
+                GraphNode lockNode = new GraphNode(
+                        eventDTO.getLockAddress(),
+                        NodeType.LOCK,
+                        "Monitor-" + eventDTO.getLockAddress()
+                );
+
+                waitForGraph.addNode(waitingThread);
+                waitForGraph.addNode(ownerThread);
+                waitForGraph.addNode(lockNode);
+
+                waitForGraph.addEdge(
+                        new GraphEdge(
+                                waitingThread,
+                                lockNode,
+                                EdgeType.WAITS_FOR));
+
+                waitForGraph.addEdge(
+                        new GraphEdge(
+                                lockNode,
+                                ownerThread,
+                                EdgeType.HOLDS));
+
+                System.out.println("Lock Ownership Updated");
+            }
+
+            case LOCK_RELEASE -> {
+
+                System.out.println(
+                        "Lock Released : "
+                                + eventDTO.getLockAddress());
+
+                // Remove waiting edge here when your WaitForGraph supports it.
+            }
 
             default -> {
 

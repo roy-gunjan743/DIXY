@@ -16,13 +16,19 @@ public class NativeEventBridge {
      * the native agent discovers that a thread owns a lock.
      */
     public static void publishLockOwned(
+            long waitingThreadId,
+            String waitingThreadName,
             long ownerThreadId,
             String ownerThreadName,
-            long lockAddress) {
+            long lockAddress,
+            long timestamp) {
 
         EventDTO dto = new EventDTO();
 
         dto.setEventType(EventType.LOCK_OWNED);
+
+        dto.setThreadId(waitingThreadId);
+        dto.setThreadName(waitingThreadName);
 
         dto.setOwnerThreadId(ownerThreadId);
         dto.setOwnerThreadName(ownerThreadName);
@@ -35,8 +41,32 @@ public class NativeEventBridge {
 
         System.out.println("--------------------------------");
         System.out.println("JVMTI -> Java");
-        System.out.println("Owner Thread : " + ownerThreadName);
-        System.out.println("Lock Address : " + lockAddress);
+        System.out.println("Waiting Thread : " + waitingThreadName);
+        System.out.println("Owner Thread   : " + ownerThreadName);
+        System.out.println("Lock Address   : " + lockAddress);
+        System.out.println("--------------------------------");
+    }
+    public static void publishLockReleased(
+            long threadId,
+            long lockAddress,
+            long timestamp) {
+
+        EventDTO dto = new EventDTO();
+
+        dto.setEventType(EventType.LOCK_RELEASE);
+
+        dto.setThreadId(threadId);
+
+        dto.setLockAddress(lockAddress);
+
+        dto.setTimestamp(LocalDateTime.now());
+
+        collector.collect(dto);
+
+        System.out.println("--------------------------------");
+        System.out.println("Lock Released");
+        System.out.println("Thread : " + threadId);
+        System.out.println("Lock   : " + lockAddress);
         System.out.println("--------------------------------");
     }
 }
