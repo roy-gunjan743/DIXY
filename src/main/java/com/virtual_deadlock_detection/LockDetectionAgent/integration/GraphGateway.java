@@ -75,44 +75,54 @@ public class GraphGateway {
                 waitForGraph.addEdge(edge);
 
                 System.out.println(edge);
+
+                // NEW — reverse edge so a real deadlock can actually close
+                // into a cycle. Requires JfrEventListener's previousOwner fix above.
+                if (eventDTO.getOwnerThreadId() != 0) {
+
+                    GraphNode ownerNode = new GraphNode(
+                            eventDTO.getOwnerThreadId(),
+                            NodeType.VIRTUAL_THREAD,
+                            eventDTO.getOwnerThreadName()
+                    );
+
+                    waitForGraph.addNode(ownerNode);
+
+                    GraphEdge holdsEdge = new GraphEdge(
+                            lockNode,
+                            ownerNode,
+                            EdgeType.HOLDS
+                    );
+
+                    waitForGraph.addEdge(holdsEdge);
+
+                    System.out.println(holdsEdge);
+                }
             }
+
             case LOCK_OWNED -> {
 
-                GraphNode waitingThread = new GraphNode(
-                        eventDTO.getThreadId(),
-                        NodeType.VIRTUAL_THREAD,
-                        eventDTO.getThreadName()
-                );
-
-                GraphNode ownerThread = new GraphNode(
-                        eventDTO.getOwnerThreadId(),
-                        NodeType.VIRTUAL_THREAD,
-                        eventDTO.getOwnerThreadName()
-                );
-
+                // From the native JVMTI path (NativeEventBridge.publishLockOwned).
+                // Was previously falling through to `default` and being dropped silently.
                 GraphNode lockNode = new GraphNode(
                         eventDTO.getLockAddress(),
                         NodeType.LOCK,
                         "Monitor-" + eventDTO.getLockAddress()
                 );
 
-                waitForGraph.addNode(waitingThread);
-                waitForGraph.addNode(ownerThread);
+                GraphNode ownerNode = new GraphNode(
+                        eventDTO.getOwnerThreadId(),
+                        NodeType.VIRTUAL_THREAD,
+                        eventDTO.getOwnerThreadName()
+                );
+
                 waitForGraph.addNode(lockNode);
+                waitForGraph.addNode(ownerNode);
 
-                waitForGraph.addEdge(
-                        new GraphEdge(
-                                waitingThread,
-                                lockNode,
-                                EdgeType.WAITS_FOR));
+                GraphEdge edge = new GraphEdge(lockNode, ownerNode, EdgeType.HOLDS);
+                waitForGraph.addEdge(edge);
 
-                waitForGraph.addEdge(
-                        new GraphEdge(
-                                lockNode,
-                                ownerThread,
-                                EdgeType.HOLDS));
-
-                System.out.println("Lock Ownership Updated");
+                System.out.println(edge);
             }
 
             case LOCK_RELEASE -> {

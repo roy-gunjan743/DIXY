@@ -90,6 +90,17 @@ public class JfrEventListener {
                 dto.setLockAddress(event.getLong("address"));
             }
 
+            // NEW — the thread that already held the monitor when this
+            // thread had to wait. Without this, there was no way to add a
+            // reverse edge, so a live deadlock could never close into a cycle.
+            if (event.hasField("previousOwner")) {
+                RecordedThread owner = event.getThread("previousOwner");
+                if (owner != null) {
+                    dto.setOwnerThreadId(owner.getJavaThreadId());
+                    dto.setOwnerThreadName(owner.getJavaName());
+                }
+            }
+
             dto.setTimestamp(LocalDateTime.now());
             collector.collect(dto);
 
