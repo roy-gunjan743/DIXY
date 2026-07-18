@@ -124,6 +124,28 @@ public class GraphGateway {
                 // Remove waiting edge here when your WaitForGraph supports it.
             }
 
+            case PINNING -> {
+
+                GraphNode carrierNode = new GraphNode(
+                        eventDTO.getCarrierThreadId(),
+                        NodeType.CARRIER_THREAD,
+                        eventDTO.getCarrierThreadName()
+                );
+
+                waitForGraph.addNode(threadNode);
+                waitForGraph.addNode(carrierNode);
+
+                GraphEdge edge = new GraphEdge(
+                        threadNode,
+                        carrierNode,
+                        EdgeType.PINS
+                );
+
+                waitForGraph.addEdge(edge);
+
+                System.out.println("Pinning Edge Added: " + edge);
+            }
+
             default -> {
 
                 System.out.println("Unsupported Event : "

@@ -1,18 +1,14 @@
 package com.virtual_deadlock_detection.LockDetectionAgent.agent;
 
 import com.virtual_deadlock_detection.LockDetectionAgent.collector.EventCollector;
+import com.virtual_deadlock_detection.LockDetectionAgent.runtime.RuntimeContext;
 import com.virtual_deadlock_detection.graph.detector.DeadlockDetector;
 import com.virtual_deadlock_detection.graph.engine.GraphEngine;
 import com.virtual_deadlock_detection.graph.registry.WaitForGraph;
-import com.virtual_deadlock_detection.LockDetectionAgent.sender.EventSender;
 
 public class AgentBootstrap {
 
     private final EventCollector eventCollector;
-
-    private final DeadlockDetector detector;
-
-    private final GraphEngine graphEngine;
 
     public AgentBootstrap() {
 
@@ -22,10 +18,6 @@ public class AgentBootstrap {
 
         eventCollector = new EventCollector();
 
-        detector = new DeadlockDetector();
-
-        graphEngine = RuntimeContext.engine();
-
         System.out.println("Agent Components Initialized Successfully");
     }
 
@@ -33,15 +25,21 @@ public class AgentBootstrap {
         return eventCollector;
     }
 
+    // Was: EventSender.getGraph(). Now points at the one shared graph.
     public WaitForGraph getGraph() {
-        return EventSender.getGraph();
+        return RuntimeContext.GRAPH;
     }
 
+    // Was: its own private `new DeadlockDetector()`. Now the shared instance
+    // (harmless either way since DeadlockDetector is stateless, but this
+    // keeps one source of truth as the codebase grows).
     public DeadlockDetector getDetector() {
-        return detector;
+        return RuntimeContext.DETECTOR;
     }
 
+    // Was: RuntimeContext.engine() — ambiguous, resolved to the now-deleted
+    // agent.RuntimeContext duplicate. Now explicit.
     public GraphEngine getGraphEngine() {
-        return graphEngine;
+        return RuntimeContext.ENGINE;
     }
 }

@@ -21,6 +21,26 @@ public class EventDTO {
 
     private LocalDateTime timestamp;
 
+    private long carrierThreadId;
+
+    private String carrierThreadName;
+
+    public long getCarrierThreadId() {
+        return carrierThreadId;
+    }
+
+    public void setCarrierThreadId(long carrierThreadId) {
+        this.carrierThreadId = carrierThreadId;
+    }
+
+    public String getCarrierThreadName() {
+        return carrierThreadName;
+    }
+
+    public void setCarrierThreadName(String carrierThreadName) {
+        this.carrierThreadName = carrierThreadName;
+    }
+
     public EventType getEventType() {
         return eventType;
     }

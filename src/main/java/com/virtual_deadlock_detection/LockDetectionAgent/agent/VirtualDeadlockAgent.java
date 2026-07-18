@@ -23,16 +23,13 @@ public class VirtualDeadlockAgent {
 
         RecordingManager recordingManager = new RecordingManager();
 
-        // Later we'll inject the collector into RecordingManager
-        // recordingManager.setCollector(collector);
+        // Was: commented out. Now wired — JFR and JVMTI share one collector.
+        recordingManager.setCollector(collector);
 
         recordingManager.startRecording();
 
         JvmtiBridge jvmtiBridge = new JvmtiBridge();
         jvmtiBridge.initialize();
-
-        // Run deadlock detection on the current graph
-
 
         System.out.println("Agent Initialization Completed");
     }

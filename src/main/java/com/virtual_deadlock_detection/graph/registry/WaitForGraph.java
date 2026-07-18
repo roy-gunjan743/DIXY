@@ -8,8 +8,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-import static org.apache.logging.log4j.MarkerManager.clear;
-
 public class WaitForGraph {
 
     private final Map<GraphNode, Set<GraphEdge>> adjacencyList =
@@ -54,13 +52,16 @@ public class WaitForGraph {
                 adjacencyList.keySet()
         );
     }
-    public  void rebuild(Set<GraphEdge> edges) {
 
-        clear();
+    public void rebuild(Set<GraphEdge> edges) {
+
+        // Was: `clear()` from a bad static import of
+        // org.apache.logging.log4j.MarkerManager — cleared Log4j's global
+        // marker registry, not this graph. Now clears this graph's own state.
+        adjacencyList.clear();
 
         for (GraphEdge edge : edges) {
             addEdge(edge);
         }
-
     }
 }

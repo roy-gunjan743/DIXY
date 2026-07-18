@@ -8,5 +8,7 @@ public enum EventType {
     THREAD_PARKED,
     LOCK_ACQUIRE,
     LOCK_RELEASE,
-    LOCK_OWNED
+    LOCK_OWNED,
+    PINNING   // NEW — carrier-thread pinning, the core patent-claim event
+
 }
