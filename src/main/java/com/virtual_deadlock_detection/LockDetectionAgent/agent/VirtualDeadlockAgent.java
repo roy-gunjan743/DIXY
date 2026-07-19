@@ -3,6 +3,7 @@ package com.virtual_deadlock_detection.LockDetectionAgent.agent;
 import com.virtual_deadlock_detection.LockDetectionAgent.collector.EventCollector;
 import com.virtual_deadlock_detection.LockDetectionAgent.jfr.RecordingManager;
 import com.virtual_deadlock_detection.LockDetectionAgent.jvmti.JvmtiBridge;
+import com.virtual_deadlock_detection.LockDetectionAgent.monitor.ThreadStatePoller;
 
 import java.lang.instrument.Instrumentation;
 
@@ -27,6 +28,11 @@ public class VirtualDeadlockAgent {
         recordingManager.setCollector(collector);
 
         recordingManager.startRecording();
+
+
+        // NEW — JFR alone can't see permanent blocks (see ThreadStatePoller javadoc).
+        ThreadStatePoller poller = new ThreadStatePoller(collector);
+        poller.start(250);
 
         JvmtiBridge jvmtiBridge = new JvmtiBridge();
         jvmtiBridge.initialize();

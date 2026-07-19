@@ -8,6 +8,7 @@ import com.virtual_deadlock_detection.graph.model.DeadlockCycle;
 import com.virtual_deadlock_detection.graph.model.EdgeType;
 import com.virtual_deadlock_detection.graph.model.GraphEdge;
 import com.virtual_deadlock_detection.graph.registry.WaitForGraph;
+import com.virtual_deadlock_detection.LockDetectionAgent.monitor.ThreadStatePoller;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,24 +36,26 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class EndToEndPinningDeadlockTest {
 
     private RecordingManager recordingManager;
+    private ThreadStatePoller poller;
 
     @BeforeEach
     void startAgentPipeline() {
-        // RuntimeContext.GRAPH is a shared static — clear it so edges from a
-        // previous test (or previous run) don't leak into this one's assertions.
         RuntimeContext.GRAPH.rebuild(Collections.emptySet());
 
         EventCollector collector = new EventCollector();
+
         recordingManager = new RecordingManager();
         recordingManager.setCollector(collector);
         recordingManager.startRecording();
+
+        poller = new ThreadStatePoller(collector);
+        poller.start(250);
     }
 
     @AfterEach
     void stopAgentPipeline() {
-        if (recordingManager != null) {
-            recordingManager.stopRecording();
-        }
+        if (recordingManager != null) recordingManager.stopRecording();
+        if (poller != null) poller.stop();
     }
 
     @Test
