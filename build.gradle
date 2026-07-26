@@ -42,6 +42,7 @@ dependencies {
     testAnnotationProcessor 'org.projectlombok:lombok'
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
+    implementation "org.springframework.boot:spring-boot-starter-security"
 
 }
 bootJar {
