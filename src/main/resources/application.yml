@@ -1,6 +1,9 @@
 spring:
   application:
     name: virtual_deadlock_detection
+    app:
+      seed-data:
+        enabled:
 
   datasource:
     url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:virtual_deadlock_detection}
