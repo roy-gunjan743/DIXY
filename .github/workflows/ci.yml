@@ -23,11 +23,21 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ make
+
+      - name: Build native JVMTI library
+        run: |
+          cmake -S native -B native/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build native/build --config Release
+
       - name: Run tests
         run: ./gradlew test --no-daemon
 
-      - name: Build application jar
-        run: ./gradlew bootJar --no-daemon
+      - name: Build application and agent jars
+        run: ./gradlew bootJar jar --no-daemon
 
       - name: Build Docker image
         run: |

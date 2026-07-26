@@ -279,7 +279,7 @@ static void JNICALL MonitorWaited(
  */
 
 JNIEXPORT void JNICALL
-Java_com_virtual_1deadlock_1detection_jvmti_JvmtiBridge_initializeAgent
+Java_com_virtual_1deadlock_1detection_LockDetectionAgent_jvmti_JvmtiBridge_initializeAgent
 (JNIEnv* env, jobject obj) {
 
     JavaVM* jvm = nullptr;
@@ -399,7 +399,7 @@ Java_com_virtual_1deadlock_1detection_jvmti_JvmtiBridge_initializeAgent
  */
 
 JNIEXPORT void JNICALL
-Java_com_virtual_1deadlock_1detection_jvmti_JvmtiBridge_shutdownAgent
+Java_com_virtual_1deadlock_1detection_LockDetectionAgent_jvmti_JvmtiBridge_shutdownAgent
 (JNIEnv* env, jobject obj) {
 
     if (g_bridgeClass != nullptr) {
