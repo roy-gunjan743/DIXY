@@ -1,5 +1,5 @@
 Manifest-Version: 1.0
-Premain-Class: com.virtual_deadlock_detection.agent.VirtualDeadlockAgent
+Premain-Class: com.virtual_deadlock_detection.LockDetectionAgent.agent.VirtualDeadlockAgent
 Can-Redefine-Classes: true
 Can-Retransform-Classes: true
 

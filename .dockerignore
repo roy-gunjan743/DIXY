@@ -1,0 +1,9 @@
+.git
+.gradle
+.idea
+build
+native/build
+**/build
+out
+*.log
+hs_err_pid*.log
