@@ -63,6 +63,7 @@ jar {
 }
 tasks.named('test') {
     useJUnitPlatform()
+    forkEvery = 1
     testLogging {
         events "passed", "skipped", "failed"
         exceptionFormat "full"
