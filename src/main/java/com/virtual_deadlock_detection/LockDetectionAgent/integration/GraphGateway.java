@@ -46,7 +46,11 @@ public class GraphGateway {
 
                 System.out.println("Thread End Event Received");
 
-                // Node removal can be implemented later.
+                waitForGraph.removeEdgesTouching(threadNode);
+
+                System.out.println(
+                        "Removed graph edges for "
+                                + threadNode.getLabel());
             }
 
             case THREAD_PARKED -> {
@@ -128,11 +132,21 @@ public class GraphGateway {
 
             case LOCK_RELEASE -> {
 
-                System.out.println(
-                        "Lock Released : "
-                                + eventDTO.getLockAddress());
+                GraphNode lockNode = new GraphNode(
+                        eventDTO.getLockAddress(),
+                        NodeType.LOCK,
+                        "Monitor-" + eventDTO.getLockAddress()
+                );
 
-                // Remove waiting edge here when your WaitForGraph supports it.
+                GraphEdge holdsEdge = new GraphEdge(
+                        lockNode,
+                        threadNode,
+                        EdgeType.HOLDS
+                );
+
+                waitForGraph.removeEdge(holdsEdge);
+
+                System.out.println("Removed: " + holdsEdge);
             }
 
             case PINNING -> {

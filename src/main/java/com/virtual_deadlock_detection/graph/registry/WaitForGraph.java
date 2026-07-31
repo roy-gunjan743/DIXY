@@ -3,6 +3,7 @@ package com.virtual_deadlock_detection.graph.registry;
 import com.virtual_deadlock_detection.graph.model.GraphEdge;
 import com.virtual_deadlock_detection.graph.model.GraphNode;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
@@ -41,6 +42,18 @@ public class WaitForGraph {
         }
     }
 
+    public void removeEdgesTouching(GraphNode node) {
+
+        // Remove all outgoing edges
+        adjacencyList.remove(node);
+
+        // Remove all incoming edges
+        for (Set<GraphEdge> edges : adjacencyList.values()) {
+            edges.removeIf(edge ->
+                    edge.getTarget().equals(node));
+        }
+    }
+
     public Map<GraphNode, Set<GraphEdge>> getEdges() {
 
         return Collections.unmodifiableMap(adjacencyList);
@@ -53,15 +66,30 @@ public class WaitForGraph {
         );
     }
 
-    public void rebuild(Set<GraphEdge> edges) {
+    public synchronized void rebuild(Collection<GraphEdge> edges) {
 
-        // Was: `clear()` from a bad static import of
-        // org.apache.logging.log4j.MarkerManager — cleared Log4j's global
-        // marker registry, not this graph. Now clears this graph's own state.
-        adjacencyList.clear();
+        // Ignore invalid snapshots so we don't destroy the current graph
+        if (edges == null || edges.isEmpty()) {
+            return;
+        }
+
+        // Build a new graph first
+        Map<GraphNode, Set<GraphEdge>> newAdjacencyList =
+                new ConcurrentHashMap<>();
 
         for (GraphEdge edge : edges) {
-            addEdge(edge);
+
+            newAdjacencyList
+                    .computeIfAbsent(
+                            edge.getSource(),
+                            k -> ConcurrentHashMap.newKeySet())
+                    .add(edge);
         }
+
+        // Replace the live graph only after the new one is ready
+        adjacencyList.clear();
+        adjacencyList.putAll(newAdjacencyList);
     }
+
+
 }

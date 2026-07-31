@@ -60,4 +60,6 @@ public final class GraphEdge {
     public String toString() {
         return source + " --[" + type + "]--> " + target;
     }
+
+
 }
