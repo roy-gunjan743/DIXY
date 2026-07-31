@@ -1,6 +1,7 @@
 package com.virtual_deadlock_detection.LockDetectionAgent.integration;
 
 import com.virtual_deadlock_detection.LockDetectionAgent.dto.EventDTO;
+import com.virtual_deadlock_detection.LockDetectionAgent.runtime.RuntimeContext;
 import com.virtual_deadlock_detection.graph.detector.DeadlockDetector;
 import com.virtual_deadlock_detection.graph.model.DeadlockCycle;
 import com.virtual_deadlock_detection.graph.model.EdgeType;
@@ -14,7 +15,7 @@ import java.util.List;
 public class GraphGateway {
 
     private final WaitForGraph waitForGraph;
-    private final DeadlockDetector detector = new DeadlockDetector();
+    private final DeadlockDetector detector = RuntimeContext.DETECTOR;
 
     public GraphGateway(WaitForGraph waitForGraph) {
         this.waitForGraph = waitForGraph;

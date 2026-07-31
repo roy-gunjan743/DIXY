@@ -1,5 +1,6 @@
 package com.virtual_deadlock_detection.backend.service;
 
+import com.virtual_deadlock_detection.LockDetectionAgent.runtime.RuntimeContext;
 import com.virtual_deadlock_detection.graph.detector.DeadlockDetector;
 import com.virtual_deadlock_detection.graph.model.DeadlockCycle;
 import com.virtual_deadlock_detection.graph.registry.WaitForGraph;
@@ -15,7 +16,7 @@ public class GraphService {
 
     public GraphService(WaitForGraph waitForGraph) {
         this.waitForGraph = waitForGraph;
-        this.detector = new DeadlockDetector();
+        this.detector = RuntimeContext.DETECTOR;
     }
 
     public List<DeadlockCycle> detectDeadlocks() {

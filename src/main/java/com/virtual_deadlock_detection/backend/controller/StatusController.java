@@ -1,5 +1,6 @@
 package com.virtual_deadlock_detection.backend.controller;
 
+import com.virtual_deadlock_detection.LockDetectionAgent.runtime.RuntimeContext;
 import com.virtual_deadlock_detection.backend.entity.LockEntity;
 import com.virtual_deadlock_detection.backend.entity.ThreadEntity;
 import com.virtual_deadlock_detection.backend.entity.WaitEdgeEntity;
@@ -163,8 +164,7 @@ public class StatusController {
         }
 
         // 2. Detect Deadlocks
-        DeadlockDetector detector = new DeadlockDetector();
-        List<DeadlockCycle> cycles = detector.detect(graph);
+        List<DeadlockCycle> cycles = RuntimeContext.DETECTOR.detect(graph);
 
         // 3. Map Deadlock Cycles to Frontend structure
         List<DeadlockEdgeDTO> deadlockEdges = new ArrayList<>();
