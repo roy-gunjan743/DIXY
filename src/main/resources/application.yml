@@ -6,12 +6,12 @@ spring:
         enabled:
 
   datasource:
-    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:virtual_deadlock_detection}
-    username: ${DB_USERNAME:root}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:virtual_deadlock_detection}
+    username: ${DB_USERNAME:postgres}
     # No default here on purpose: startup fails fast if DB_PASSWORD isn't set,
     # instead of silently falling back to a credential checked into source control.
     password: ${DB_PASSWORD}
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    driver-class-name: org.postgresql.Driver
 
   data:
     redis:

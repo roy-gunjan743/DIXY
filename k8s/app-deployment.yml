@@ -23,13 +23,13 @@ spec:
             - containerPort: 8080
           env:
             - name: DB_HOST
-              value: mysql
+              value: postgres
             - name: DB_PORT
-              value: "3306"
+              value: "5432"
             - name: DB_NAME
               value: virtual_deadlock_detection
             - name: DB_USERNAME
-              value: root
+              value: postgres
             - name: DB_PASSWORD
               valueFrom:
                 secretKeyRef:
