@@ -1,17 +1,17 @@
 services:
-  mysql:
-    image: mysql:8.4
-    container_name: vdd-mysql
+  postgres:
+    image: postgres:16
+    container_name: vdd-postgres
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: gupi@1234
-      MYSQL_DATABASE: virtual_deadlock_detection
+      POSTGRES_PASSWORD: gupi@1234
+      POSTGRES_DB: virtual_deadlock_detection
     ports:
-      - "3307:3306"
+      - "5433:5432"
     volumes:
-      - mysql_data:/var/lib/mysql
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-pgupi@1234"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d virtual_deadlock_detection"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -30,15 +30,15 @@ services:
     container_name: vdd-app
     restart: unless-stopped
     depends_on:
-      mysql:
+      postgres:
         condition: service_healthy
       redis:
         condition: service_started
     environment:
-      DB_HOST: mysql
-      DB_PORT: 3306
+      DB_HOST: postgres
+      DB_PORT: 5432
       DB_NAME: virtual_deadlock_detection
-      DB_USERNAME: root
+      DB_USERNAME: postgres
       DB_PASSWORD: gupi@1234
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -56,21 +56,21 @@ services:
       - app
 
   grafana:
-      image: grafana/grafana:9.5.15
-      container_name: vdd-grafana
-      restart: unless-stopped
-      user: "0"
-      environment:
-        GF_SECURITY_ADMIN_USER: admin
-        GF_SECURITY_ADMIN_PASSWORD: admin
-        GF_SECURITY_ALLOW_EMBEDDING: "true"
-      ports:
-        - "3000:3000"
-      volumes:
-        - grafana_data:/var/lib/grafana
-      depends_on:
-        - prometheus
+    image: grafana/grafana:9.5.15
+    container_name: vdd-grafana
+    restart: unless-stopped
+    user: "0"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SECURITY_ALLOW_EMBEDDING: "true"
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
 
 volumes:
-  mysql_data:
+  postgres_data:
   grafana_data:

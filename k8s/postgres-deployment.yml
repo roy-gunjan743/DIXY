@@ -1,35 +1,35 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: mysql
+  name: postgres
   namespace: vdd
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: mysql
+      app: postgres
   template:
     metadata:
       labels:
-        app: mysql
+        app: postgres
     spec:
       containers:
-        - name: mysql
-          image: mysql:8.4
+        - name: postgres
+          image: postgres:16
           ports:
-            - containerPort: 3306
+            - containerPort: 5432
           env:
-            - name: MYSQL_ROOT_PASSWORD
+            - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: vdd-secrets
                   key: DB_PASSWORD
-            - name: MYSQL_DATABASE
+            - name: POSTGRES_DB
               value: virtual_deadlock_detection
           volumeMounts:
-            - name: mysql-storage
-              mountPath: /var/lib/mysql
+            - name: postgres-storage
+              mountPath: /var/lib/postgresql/data
       volumes:
-        - name: mysql-storage
+        - name: postgres-storage
           persistentVolumeClaim:
-            claimName: mysql-pvc
+            claimName: postgres-pvc

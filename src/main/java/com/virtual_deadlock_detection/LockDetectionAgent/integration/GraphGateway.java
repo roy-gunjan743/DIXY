@@ -1,6 +1,7 @@
 package com.virtual_deadlock_detection.LockDetectionAgent.integration;
 
 import com.virtual_deadlock_detection.LockDetectionAgent.dto.EventDTO;
+import com.virtual_deadlock_detection.LockDetectionAgent.runtime.RuntimeContext;
 import com.virtual_deadlock_detection.graph.detector.DeadlockDetector;
 import com.virtual_deadlock_detection.graph.model.DeadlockCycle;
 import com.virtual_deadlock_detection.graph.model.EdgeType;
@@ -14,7 +15,7 @@ import java.util.List;
 public class GraphGateway {
 
     private final WaitForGraph waitForGraph;
-    private final DeadlockDetector detector = new DeadlockDetector();
+    private final DeadlockDetector detector = RuntimeContext.DETECTOR;
 
     public GraphGateway(WaitForGraph waitForGraph) {
         this.waitForGraph = waitForGraph;
@@ -45,7 +46,11 @@ public class GraphGateway {
 
                 System.out.println("Thread End Event Received");
 
-                // Node removal can be implemented later.
+                waitForGraph.removeEdgesTouching(threadNode);
+
+                System.out.println(
+                        "Removed graph edges for "
+                                + threadNode.getLabel());
             }
 
             case THREAD_PARKED -> {
@@ -127,11 +132,21 @@ public class GraphGateway {
 
             case LOCK_RELEASE -> {
 
-                System.out.println(
-                        "Lock Released : "
-                                + eventDTO.getLockAddress());
+                GraphNode lockNode = new GraphNode(
+                        eventDTO.getLockAddress(),
+                        NodeType.LOCK,
+                        "Monitor-" + eventDTO.getLockAddress()
+                );
 
-                // Remove waiting edge here when your WaitForGraph supports it.
+                GraphEdge holdsEdge = new GraphEdge(
+                        lockNode,
+                        threadNode,
+                        EdgeType.HOLDS
+                );
+
+                waitForGraph.removeEdge(holdsEdge);
+
+                System.out.println("Removed: " + holdsEdge);
             }
 
             case PINNING -> {
