@@ -4,5 +4,9 @@ global:
 scrape_configs:
   - job_name: 'virtual-deadlock-detection'
     metrics_path: '/actuator/prometheus'
+    params: {}
+    http_headers:
+      X-API-Key:
+        values: ["3e81238b-ba64-42b1-b3d7-c50ea1d65d9b"]
     static_configs:
-      - targets: ['app:8080']
+      - targets: ['host.docker.internal:8081']

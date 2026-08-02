@@ -51,11 +51,11 @@ public class SecurityConfig {
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(eh -> eh.authenticationEntryPoint(authenticationEntryPoint))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/actuator/health").permitAll()
-                        // everything else, including StatusController's /clear and /seed
-                        // and every other controller, now requires a valid API key
+                        .requestMatchers("/actuator/health", "/", "/index.html", "/dashboard.html", "/static/**", "/css/**", "/js/**", "/favicon.ico").permitAll()
+                        // everything else requires a valid API key
                         .anyRequest().authenticated()
                 )
+
                 .addFilterBefore(apiKeyAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
