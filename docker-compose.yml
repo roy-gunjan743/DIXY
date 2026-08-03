@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: gupi@1234
       POSTGRES_DB: virtual_deadlock_detection
     ports:
-      - "5433:5432"
+      - "5434:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

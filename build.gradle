@@ -70,3 +70,7 @@ tasks.named('test') {
         showStandardStreams = true
     }
 }
+
+tasks.named('bootRun') {
+    jvmArgs += ['-Duser.timezone=UTC']
+}

@@ -3,14 +3,16 @@ spring:
     name: virtual_deadlock_detection
     app:
       seed-data:
-        enabled:
+        enabled: false
+
+  shell:
+    interactive:
+      enabled: true
 
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:virtual_deadlock_detection}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5434}/${DB_NAME:virtual_deadlock_detection}?options=-c%20timezone=UTC
     username: ${DB_USERNAME:postgres}
-    # No default here on purpose: startup fails fast if DB_PASSWORD isn't set,
-    # instead of silently falling back to a credential checked into source control.
-    password: ${DB_PASSWORD}
+    password: ${DB_PASSWORD:gupi@1234}
     driver-class-name: org.postgresql.Driver
 
   data:
@@ -21,10 +23,16 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
-    show-sql: true
+    show-sql: false
     properties:
       hibernate:
-        format_sql: true
+        format_sql: false
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc:
+          time_zone: UTC
+
+server:
+  port: ${PORT:8081}
 
 security:
   # Comma-separated list of origins allowed to call the API (used by SecurityConfig's CORS setup).
@@ -45,3 +53,27 @@ management:
 logging:
   level:
     root: INFO
+
+---
+# CLI mode: pure detection + interactive shell, no web server, no port binding
+spring:
+  config:
+    activate:
+      on-profile: cli
+  main:
+    web-application-type: none
+  shell:
+    interactive:
+      enabled: true
+
+---
+# Web mode: dashboard/API only, shell disabled so it doesn't block the terminal
+spring:
+  config:
+    activate:
+      on-profile: web
+  main:
+    web-application-type: servlet
+  shell:
+    interactive:
+      enabled: false
