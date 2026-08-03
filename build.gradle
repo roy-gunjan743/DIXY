@@ -1,5 +1,6 @@
 plugins {
     id 'java'
+    id 'maven-publish'
     id 'org.springframework.boot' version '4.1.0'
     id 'io.spring.dependency-management' version '1.1.7'
     id 'org.jetbrains.kotlin.jvm'
@@ -74,4 +75,33 @@ tasks.named('test') {
 
 tasks.named('bootRun') {
     jvmArgs += ['-Duser.timezone=UTC']
+}
+
+publishing {
+    publications {
+        // Publishes the plain (agent) jar produced by the `jar` task, using
+        // the standard Java component (pom with your dependencies included).
+        gpr(MavenPublication) {
+            from components.java
+            groupId = project.group
+            artifactId = 'virtual-deadlock-detection'
+            version = project.version
+
+            // Also attach the runnable Spring Boot fat jar as an extra
+            // artifact with a "boot" classifier so both are available.
+            artifact(bootJar) {
+                classifier = 'boot'
+            }
+        }
+    }
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/roy-gunjan743/DIXY")
+            credentials {
+                username = project.findProperty("gpr.user") ?: System.getenv("GITHUB_ACTOR")
+                password = project.findProperty("gpr.key") ?: System.getenv("GITHUB_TOKEN")
+            }
+        }
+    }
 }
