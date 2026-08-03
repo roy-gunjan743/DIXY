@@ -3,6 +3,8 @@ package com.virtual_deadlock_detection.LockDetectionAgent.monitor;
 import com.virtual_deadlock_detection.LockDetectionAgent.collector.EventCollector;
 import com.virtual_deadlock_detection.LockDetectionAgent.dto.EventDTO;
 import com.virtual_deadlock_detection.LockDetectionAgent.events.EventType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.lang.management.LockInfo;
 import java.lang.management.ManagementFactory;
@@ -17,19 +19,10 @@ import java.util.concurrent.TimeUnit;
 /**
  * Polls ThreadMXBean on an interval and reports LIVE blocked-on-monitor
  * state directly into the shared EventCollector.
- *
- * WHY THIS EXISTS: jdk.JavaMonitorEnter is a JFR *duration* event — it only
- * commits once a thread successfully acquires the monitor it was contending
- * for. A permanently blocked thread (a real deadlock) never acquires it,
- * so the event never fires — confirmed in CI: two genuinely deadlocked
- * threads produced zero LOCK_ACQUIRE events for either side, for the
- * entire 3-second test window.
- *
- * ThreadMXBean.dumpAllThreads() instead reports live, in-progress blocking
- * state on every poll, independent of whether the block ever resolves.
  */
 public class ThreadStatePoller {
 
+    private static final Logger log = LoggerFactory.getLogger(ThreadStatePoller.class);
     private final EventCollector collector;
     private final ThreadMXBean threadMXBean = ManagementFactory.getThreadMXBean();
     private final ScheduledExecutorService scheduler =
@@ -44,6 +37,29 @@ public class ThreadStatePoller {
     public ThreadStatePoller(EventCollector collector) {
         this.collector = Objects.requireNonNull(collector, "collector");
     }
+
+    private boolean isIgnoredThread(String threadName) {
+        if (threadName == null) return true;
+        String name = threadName.toLowerCase();
+        return name.equals("main") ||
+               name.contains("jfr event stream") ||
+               name.contains("catalina-utility") ||
+               name.contains("vld-thread-state-poller") ||
+               name.contains("lettuce-timer") ||
+               name.contains("common-cleaner") ||
+               name.contains("reference handler") ||
+               name.contains("finalizer") ||
+               name.contains("signal dispatcher") ||
+               name.contains("attach listener") ||
+               name.contains("notification thread") ||
+               name.contains("compilerthread") ||
+               name.contains("sweeper") ||
+               name.contains("service thread") ||
+               name.contains("vm thread") ||
+               name.contains("http-nio") ||
+               name.contains("tomcat");
+    }
+
 
     public void start(long intervalMillis) {
         if (running) return;
@@ -63,6 +79,7 @@ public class ThreadStatePoller {
             for (ThreadInfo info : allThreads) {
                 if (info == null) continue;
                 if (info.getThreadState() != Thread.State.BLOCKED) continue;
+                if (isIgnoredThread(info.getThreadName())) continue;
 
                 LockInfo lockInfo = info.getLockInfo();
                 if (lockInfo == null) continue;
@@ -82,8 +99,7 @@ public class ThreadStatePoller {
                 collector.collect(dto);
             }
         } catch (Throwable t) {
-            // Never let a polling hiccup kill the scheduler.
-            System.err.println("ThreadStatePoller: poll failed: " + t);
+            log.debug("ThreadStatePoller: poll failed: {}", t.getMessage());
         }
     }
-}
+}

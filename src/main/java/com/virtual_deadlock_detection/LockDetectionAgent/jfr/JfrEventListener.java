@@ -5,20 +5,43 @@ import com.virtual_deadlock_detection.LockDetectionAgent.dto.EventDTO;
 import com.virtual_deadlock_detection.LockDetectionAgent.events.EventType;
 import jdk.jfr.consumer.RecordedThread;
 import jdk.jfr.consumer.RecordingStream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.LocalDateTime;
 import java.util.Objects;
 
 public class JfrEventListener {
 
+    private static final Logger log = LoggerFactory.getLogger(JfrEventListener.class);
     private final EventCollector collector;
 
-    // Was: private final EventCollector collector = new EventCollector();
-    // Now takes the same instance AgentBootstrap/VirtualDeadlockAgent created,
-    // so JFR events land in the same place as JVMTI events.
     public JfrEventListener(EventCollector collector) {
         this.collector = Objects.requireNonNull(collector, "collector");
     }
+
+    private boolean isIgnoredThread(String threadName) {
+        if (threadName == null) return true;
+        String name = threadName.toLowerCase();
+        return name.equals("main") ||
+               name.contains("jfr event stream") ||
+               name.contains("catalina-utility") ||
+               name.contains("vld-thread-state-poller") ||
+               name.contains("lettuce-timer") ||
+               name.contains("common-cleaner") ||
+               name.contains("reference handler") ||
+               name.contains("finalizer") ||
+               name.contains("signal dispatcher") ||
+               name.contains("attach listener") ||
+               name.contains("notification thread") ||
+               name.contains("compilerthread") ||
+               name.contains("sweeper") ||
+               name.contains("service thread") ||
+               name.contains("vm thread") ||
+               name.contains("http-nio") ||
+               name.contains("tomcat");
+    }
+
 
     public void registerEvents(RecordingStream stream) {
 
@@ -31,68 +54,57 @@ public class JfrEventListener {
 
         // 1. Thread Start
         stream.onEvent("jdk.ThreadStart", event -> {
+            RecordedThread thread = event.getThread("thread");
+            if (thread == null || isIgnoredThread(thread.getJavaName())) return;
+
             EventDTO dto = new EventDTO();
             dto.setEventType(EventType.THREAD_START);
-
-            RecordedThread thread = event.getThread("thread");
-            if (thread != null) {
-                dto.setThreadId(thread.getJavaThreadId());
-                dto.setThreadName(thread.getJavaName());
-            }
+            dto.setThreadId(thread.getJavaThreadId());
+            dto.setThreadName(thread.getJavaName());
             dto.setTimestamp(LocalDateTime.now());
             collector.collect(dto);
         });
 
         // 2. Thread End
         stream.onEvent("jdk.ThreadEnd", event -> {
+            RecordedThread thread = event.getThread();
+            if (thread == null || isIgnoredThread(thread.getJavaName())) return;
+
             EventDTO dto = new EventDTO();
             dto.setEventType(EventType.THREAD_END);
-
-            RecordedThread thread = event.getThread();
-            if (thread != null) {
-                dto.setThreadId(thread.getJavaThreadId());
-                dto.setThreadName(thread.getJavaName());
-            }
+            dto.setThreadId(thread.getJavaThreadId());
+            dto.setThreadName(thread.getJavaName());
             dto.setTimestamp(LocalDateTime.now());
             collector.collect(dto);
         });
 
         // 3. Thread Park (Virtual Thread specific blocking)
         stream.onEvent("jdk.ThreadPark", event -> {
+            RecordedThread thread = event.getThread();
+            if (thread == null || isIgnoredThread(thread.getJavaName())) return;
+
             EventDTO dto = new EventDTO();
             dto.setEventType(EventType.THREAD_PARKED);
-
-            RecordedThread thread = event.getThread();
-            if (thread != null) {
-                dto.setThreadId(thread.getJavaThreadId());
-                dto.setThreadName(thread.getJavaName());
-            }
-
-            if (event.hasField("address")) {
-                dto.setLockAddress(event.getLong("address"));
-            }
+            dto.setThreadId(thread.getJavaThreadId());
+            dto.setThreadName(thread.getJavaName());
             dto.setTimestamp(LocalDateTime.now());
             collector.collect(dto);
         });
 
-        // 4. Java Monitor Enter (Mapped to your LOCK_ACQUIRE)
+        // 4. Java Monitor Enter (Lock Contention)
         stream.onEvent("jdk.JavaMonitorEnter", event -> {
+            RecordedThread thread = event.getThread();
+            if (thread == null || isIgnoredThread(thread.getJavaName())) return;
+
             EventDTO dto = new EventDTO();
             dto.setEventType(EventType.LOCK_ACQUIRE);
-
-            RecordedThread thread = event.getThread();
-            if (thread != null) {
-                dto.setThreadId(thread.getJavaThreadId());
-                dto.setThreadName(thread.getJavaName());
-            }
+            dto.setThreadId(thread.getJavaThreadId());
+            dto.setThreadName(thread.getJavaName());
 
             if (event.hasField("address")) {
                 dto.setLockAddress(event.getLong("address"));
             }
 
-            // NEW — the thread that already held the monitor when this
-            // thread had to wait. Without this, there was no way to add a
-            // reverse edge, so a live deadlock could never close into a cycle.
             if (event.hasField("previousOwner")) {
                 RecordedThread owner = event.getThread("previousOwner");
                 if (owner != null) {
@@ -104,19 +116,18 @@ public class JfrEventListener {
             dto.setTimestamp(LocalDateTime.now());
             collector.collect(dto);
 
-            System.out.println("🚨 JFR CAUGHT LOCK WAIT: " + dto.getThreadName() + " waiting on lock " + dto.getLockAddress());
+            log.debug("JFR Lock Wait: {} waiting on lock {}", dto.getThreadName(), dto.getLockAddress());
         });
 
-        // 5. Java Monitor Wait (Mapped to your THREAD_BLOCKED)
+        // 5. Java Monitor Wait
         stream.onEvent("jdk.JavaMonitorWait", event -> {
+            RecordedThread thread = event.getThread();
+            if (thread == null || isIgnoredThread(thread.getJavaName())) return;
+
             EventDTO dto = new EventDTO();
             dto.setEventType(EventType.THREAD_BLOCKED);
-
-            RecordedThread thread = event.getThread();
-            if (thread != null) {
-                dto.setThreadId(thread.getJavaThreadId());
-                dto.setThreadName(thread.getJavaName());
-            }
+            dto.setThreadId(thread.getJavaThreadId());
+            dto.setThreadName(thread.getJavaName());
 
             if (event.hasField("address")) {
                 dto.setLockAddress(event.getLong("address"));
@@ -126,32 +137,21 @@ public class JfrEventListener {
             collector.collect(dto);
         });
 
-        // 6. Virtual Thread Pinned — the event that makes the unified
-        // pinning+deadlock graph claim real.
+        // 6. Virtual Thread Pinned
         stream.onEvent("jdk.VirtualThreadPinned", event -> {
+            RecordedThread thread = event.getThread();
+            if (thread == null || isIgnoredThread(thread.getJavaName())) return;
+
             EventDTO dto = new EventDTO();
             dto.setEventType(EventType.PINNING);
-
-            RecordedThread thread = event.getThread();
-            if (thread != null) {
-                dto.setThreadId(thread.getJavaThreadId());
-                dto.setThreadName(thread.getJavaName());
-
-                // TODO: jdk.VirtualThreadPinned has no distinct carrier-thread
-                // field as of this JDK build — approximating carrier identity
-                // via the OS thread id of the pinned virtual thread's current
-                // carrier. Verify against `jfr metadata` for your JDK build
-                // and replace with a dedicated carrier field if one becomes
-                // available in a later JDK.
-                dto.setCarrierThreadId(thread.getOSThreadId());
-                dto.setCarrierThreadName("carrier-" + thread.getOSThreadId());
-            }
-
+            dto.setThreadId(thread.getJavaThreadId());
+            dto.setThreadName(thread.getJavaName());
+            dto.setCarrierThreadId(thread.getOSThreadId());
+            dto.setCarrierThreadName("carrier-" + thread.getOSThreadId());
             dto.setTimestamp(LocalDateTime.now());
             collector.collect(dto);
 
-            System.out.println("⚠️ JFR CAUGHT VIRTUAL THREAD PINNING: "
-                    + dto.getThreadName() + " pinned to carrier " + dto.getCarrierThreadName());
+            log.info("Virtual thread pinning detected: {} pinned to carrier {}", dto.getThreadName(), dto.getCarrierThreadName());
         });
     }
 }

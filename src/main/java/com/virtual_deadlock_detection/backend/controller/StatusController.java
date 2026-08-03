@@ -71,8 +71,9 @@ public class StatusController {
         threadRepository.deleteAll();
 
         // 1. Create Deadlocked Threads
-        ThreadEntity t1 = createThread(10023L, "JFR Event Stream 1", ThreadState.BLOCKED, "ForkJoinPool-1-worker-1");
-        ThreadEntity t2 = createThread(10024L, "JFR Event Stream 2", ThreadState.BLOCKED, "ForkJoinPool-1-worker-2");
+        ThreadEntity t1 = createThread(10023L, "VirtualThread-10023", ThreadState.BLOCKED, "ForkJoinPool-1-worker-1");
+        ThreadEntity t2 = createThread(10024L, "VirtualThread-10024", ThreadState.BLOCKED, "ForkJoinPool-1-worker-2");
+
 
         // 2. Create Pinned Threads (Warnings)
         ThreadEntity p1 = createThread(2041L, "VirtualThread-2041", ThreadState.BLOCKED, "ForkJoinPool-1-worker-3");
