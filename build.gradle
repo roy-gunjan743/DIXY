@@ -51,7 +51,6 @@ bootJar {
 
 jar {
     enabled = true
-
     archiveClassifier = 'plain'
 
     manifest {
