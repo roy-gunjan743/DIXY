@@ -6,7 +6,7 @@ plugins {
     id 'org.jetbrains.kotlin.jvm'
 }
 
-group = 'com.isro'
+group = 'com.dixy'
 version = '0.0.1-SNAPSHOT'
 description = 'virtual_deadlock_detection'
 
