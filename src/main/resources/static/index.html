@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Virtual Thread Deadlock & Pinning Diagnostic Console</title>
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0e17;
+            --bg-card: rgba(16, 23, 38, 0.85);
+            --bg-card-border: rgba(255, 255, 255, 0.08);
+            --accent-cyan: #00f0ff;
+            --accent-purple: #9d4edd;
+            --status-healthy: #10b981;
+            --status-warning: #f59e0b;
+            --status-critical: #ef4444;
+            --text-primary: #f8fafc;
+            --text-muted: #94a3b8;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-primary);
+            background-image: 
+                radial-gradient(circle at 15% 15%, rgba(0, 240, 255, 0.05) 0%, transparent 40%),
+                radial-gradient(circle at 85% 85%, rgba(157, 78, 221, 0.05) 0%, transparent 40%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: 24px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--bg-card-border);
+        }
+
+        .logo-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-badge {
+            background: linear-gradient(135deg, #00f0ff 0%, #7928ca 100%);
+            width: 42px;
+            height: 42px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 20px;
+            color: #fff;
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.3);
+        }
+
+        .title-container h1 {
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .title-container p {
+            font-size: 12px;
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .action-bar {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .btn {
+            background: var(--bg-card);
+            color: var(--text-primary);
+            border: 1px solid var(--bg-card-border);
+            padding: 10px 18px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            backdrop-filter: blur(10px);
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-danger {
+            background: rgba(239, 68, 68, 0.15);
+            border-color: rgba(239, 68, 68, 0.4);
+            color: #fca5a5;
+        }
+        .btn-danger:hover {
+            background: rgba(239, 68, 68, 0.3);
+            border-color: #ef4444;
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, rgba(0, 240, 255, 0.2), rgba(157, 78, 221, 0.2));
+            border-color: var(--accent-cyan);
+            color: #fff;
+        }
+        .btn-primary:hover {
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.3);
+        }
+
+        /* Metric Cards */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--bg-card-border);
+            border-radius: 12px;
+            padding: 18px;
+            backdrop-filter: blur(12px);
+        }
+
+        .card-label {
+            font-size: 12px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            font-weight: 600;
+            margin-bottom: 6px;
+            letter-spacing: 0.5px;
+        }
+
+        .card-value {
+            font-size: 24px;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .badge-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 700;
+        }
+        .badge-healthy {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        .badge-warning {
+            background: rgba(245, 158, 11, 0.15);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+        .badge-critical {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            animation: pulse-red 2s infinite;
+        }
+
+        @keyframes pulse-red {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+            50% { box-shadow: 0 0 15px 4px rgba(239, 68, 68, 0.4); }
+        }
+
+        /* Layout Main */
+        .main-layout {
+            display: grid;
+            grid-template-columns: 1fr 380px;
+            gap: 24px;
+            height: calc(100vh - 240px);
+        }
+
+        .graph-panel {
+            background: var(--bg-card);
+            border: 1px solid var(--bg-card-border);
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .panel-header {
+            padding: 14px 18px;
+            border-bottom: 1px solid var(--bg-card-border);
+            font-size: 14px;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #graph-container {
+            flex: 1;
+            width: 100%;
+            height: 100%;
+            background: #080c14;
+        }
+
+        /* Inspector Panel */
+        .details-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            overflow-y: auto;
+        }
+
+        .detail-box {
+            background: var(--bg-card);
+            border: 1px solid var(--bg-card-border);
+            border-radius: 12px;
+            padding: 16px;
+        }
+
+        .detail-box h3 {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .cycle-item {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 8px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+        }
+
+        .cycle-item .from { color: #60a5fa; font-weight: 600; }
+        .cycle-item .arrow { color: #f87171; font-weight: bold; }
+        .cycle-item .lock { color: #fbbf24; }
+        .cycle-item .to { color: #34d399; font-weight: 600; }
+
+        .pinning-item {
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 8px;
+            font-size: 12px;
+        }
+
+        .empty-state {
+            color: var(--text-muted);
+            font-size: 13px;
+            text-align: center;
+            padding: 24px;
+        }
+
+        .legend {
+            position: absolute;
+            bottom: 16px;
+            left: 16px;
+            background: rgba(10, 14, 23, 0.85);
+            border: 1px solid var(--bg-card-border);
+            border-radius: 8px;
+            padding: 10px 14px;
+            display: flex;
+            gap: 16px;
+            font-size: 11px;
+            font-weight: 500;
+            backdrop-filter: blur(8px);
+            z-index: 10;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="logo-group">
+            <div class="logo-badge">VDD</div>
+            <div class="title-container">
+                <h1>Virtual Deadlock & Pinning Analyzer</h1>
+                <p>PATENT #26 ENGINE • LIVE WAIT-FOR-GRAPH TELEMETRY</p>
+            </div>
+        </div>
+
+        <div class="action-bar">
+            <button class="btn btn-danger" onclick="seedDeadlock()">⚡ Inject 2-Way Deadlock</button>
+            <button class="btn" onclick="clearStatus()">🧹 Clear Graph</button>
+            <button class="btn btn-primary" onclick="fetchStatus()">🔄 Refresh</button>
+        </div>
+    </div>
+
+    <!-- Metrics -->
+    <div class="metrics-grid">
+        <div class="card">
+            <div class="card-label">System Health</div>
+            <div class="card-value" id="status-badge">
+                <span class="badge-status badge-healthy">HEALTHY</span>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-label">Virtual Threads</div>
+            <div class="card-value" id="metric-vthreads">0</div>
+        </div>
+        <div class="card">
+            <div class="card-label">Carrier Pool</div>
+            <div class="card-value" id="metric-carriers">0 / 16</div>
+        </div>
+        <div class="card">
+            <div class="card-label">Active Monitors</div>
+            <div class="card-value" id="metric-monitors">0</div>
+        </div>
+        <div class="card">
+            <div class="card-label">Scan Latency</div>
+            <div class="card-value" id="metric-latency">0.00 ms</div>
+        </div>
+    </div>
+
+    <!-- Main Layout -->
+    <div class="main-layout">
+        <!-- Visual Graph Container -->
+        <div class="graph-panel">
+            <div class="panel-header">
+                <span>Interactive Wait-For-Graph (WFG) Topology</span>
+                <span id="last-updated" style="font-family: 'JetBrains Mono'; font-size: 11px; color: var(--text-muted);">Updated: --</span>
+            </div>
+            <div id="graph-container"></div>
+
+            <div class="legend">
+                <div class="legend-item"><div class="dot" style="background: #3b82f6;"></div> Virtual Thread</div>
+                <div class="legend-item"><div class="dot" style="background: #f59e0b;"></div> Lock / Monitor</div>
+                <div class="legend-item"><div class="dot" style="background: #ef4444;"></div> Deadlock Cycle Edge</div>
+                <div class="legend-item"><div class="dot" style="background: #8b5cf6;"></div> Carrier Thread</div>
+            </div>
+        </div>
+
+        <!-- Details / Inspector Panel -->
+        <div class="details-panel">
+            <div class="detail-box">
+                <h3>🚨 Detected Deadlock Cycles (<span id="deadlock-count">0</span>)</h3>
+                <div id="deadlock-list">
+                    <div class="empty-state">No circular wait conditions detected. System is running cleanly.</div>
+                </div>
+            </div>
+
+            <div class="detail-box">
+                <h3>⚠️ Pinned Carrier Threads (<span id="pinning-count">0</span>)</h3>
+                <div id="pinning-list">
+                    <div class="empty-state">No virtual threads currently pinned to carrier threads.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_KEY = "3e81238b-ba64-42b1-b3d7-c50ea1d65d9b";
+        let network = null;
+
+        async function fetchStatus() {
+            try {
+                const res = await fetch("/api/v1/status", {
+                    headers: { "X-API-Key": API_KEY }
+                });
+                if (!res.ok) throw new Error("Status API returned " + res.status);
+                const data = await res.json();
+                renderUI(data);
+            } catch (err) {
+                console.error("Fetch status failed:", err);
+            }
+        }
+
+        async function seedDeadlock() {
+            try {
+                await fetch("/api/v1/status/seed", {
+                    method: "POST",
+                    headers: { "X-API-Key": API_KEY }
+                });
+                fetchStatus();
+            } catch (err) {
+                console.error("Seed failed:", err);
+            }
+        }
+
+        async function clearStatus() {
+            try {
+                await fetch("/api/v1/status/clear", {
+                    method: "DELETE",
+                    headers: { "X-API-Key": API_KEY }
+                });
+                fetchStatus();
+            } catch (err) {
+                console.error("Clear failed:", err);
+            }
+        }
+
+        function renderUI(data) {
+            // Update Status Badge
+            const badgeContainer = document.getElementById("status-badge");
+            if (data.status === "CRITICAL") {
+                badgeContainer.innerHTML = `<span class="badge-status badge-critical">CRITICAL (DEADLOCK)</span>`;
+            } else if (data.status === "WARNING") {
+                badgeContainer.innerHTML = `<span class="badge-status badge-warning">WARNING (PINNED)</span>`;
+            } else {
+                badgeContainer.innerHTML = `<span class="badge-status badge-healthy">HEALTHY</span>`;
+            }
+
+            // Update Metrics
+            if (data.metrics) {
+                document.getElementById("metric-vthreads").innerText = Number(data.metrics.virtualThreads).toLocaleString();
+                document.getElementById("metric-carriers").innerText = data.metrics.carrierPoolSize || "0 / 16";
+                document.getElementById("metric-monitors").innerText = Number(data.metrics.activeMonitors).toLocaleString();
+                document.getElementById("metric-latency").innerText = `${data.metrics.scanTimeMs.toFixed(2)} ms`;
+            }
+
+            document.getElementById("last-updated").innerText = `Updated: ${new Date().toLocaleTimeString()}`;
+
+            // Render Deadlocks List
+            const dlCount = data.deadlocks ? data.deadlocks.length : 0;
+            document.getElementById("deadlock-count").innerText = dlCount;
+            const dlList = document.getElementById("deadlock-list");
+            if (dlCount > 0) {
+                dlList.innerHTML = data.deadlocks.map(d => `
+                    <div class="cycle-item">
+                        <span class="from">${d.fromThread}</span><br>
+                        <span class="arrow">↳ WAITS FOR [${d.waitingOnLock}]</span><br>
+                        <span class="to">↳ HELD BY ${d.heldByThread}</span>
+                        ${d.isPinned ? `<div style="color: #f59e0b; margin-top: 4px;">⚠️ Carrier Pinned</div>` : ''}
+                    </div>
+                `).join("");
+            } else {
+                dlList.innerHTML = `<div class="empty-state">No circular wait conditions detected. System is running cleanly.</div>`;
+            }
+
+            // Render Pinning List
+            const pinCount = data.pinning ? data.pinning.length : 0;
+            document.getElementById("pinning-count").innerText = pinCount;
+            const pinList = document.getElementById("pinning-list");
+            if (pinCount > 0) {
+                pinList.innerHTML = data.pinning.map(p => `
+                    <div class="pinning-item">
+                        <strong>${p.virtualThread}</strong> pinned to <code>${p.carrierThread}</code><br>
+                        <span style="color: #94a3b8; font-size: 11px;">Lock: ${p.lockType}</span>
+                    </div>
+                `).join("");
+            } else {
+                pinList.innerHTML = `<div class="empty-state">No virtual threads currently pinned to carrier threads.</div>`;
+            }
+
+            // Render Vis.js Graph
+            renderGraph(data);
+        }
+
+        function renderGraph(data) {
+            const nodes = [];
+            const edges = [];
+            const nodeIds = new Set();
+
+            function addNode(id, label, group, color, shape = "box") {
+                if (!nodeIds.has(id)) {
+                    nodeIds.add(id);
+                    nodes.push({
+                        id,
+                        label,
+                        shape,
+                        color: {
+                            background: color.bg,
+                            border: color.border,
+                            highlight: { background: color.highlightBg, border: color.highlightBorder }
+                        },
+                        font: { color: "#fff", face: "Inter", size: 13, bold: true },
+                        margin: 10,
+                        shadow: { enabled: true, color: color.shadow || "rgba(0,0,0,0.5)", size: 10 }
+                    });
+                }
+            }
+
+            if (data.deadlocks && data.deadlocks.length > 0) {
+                data.deadlocks.forEach((d, idx) => {
+                    const t1 = d.fromThread;
+                    const t2 = d.heldByThread;
+                    const lockName = d.waitingOnLock;
+
+                    addNode(t1, `🧵 ${t1}`, "thread", {
+                        bg: "#1e3a8a", border: "#3b82f6", highlightBg: "#2563eb", highlightBorder: "#60a5fa", shadow: "rgba(59,130,246,0.5)"
+                    });
+
+                    addNode(t2, `🧵 ${t2}`, "thread", {
+                        bg: "#1e3a8a", border: "#3b82f6", highlightBg: "#2563eb", highlightBorder: "#60a5fa", shadow: "rgba(59,130,246,0.5)"
+                    });
+
+                    addNode(lockName, `🔒 ${lockName}`, "lock", {
+                        bg: "#78350f", border: "#f59e0b", highlightBg: "#b45309", highlightBorder: "#fbbf24", shadow: "rgba(245,158,11,0.5)"
+                    }, "ellipse");
+
+                    // Edge from Thread -> Lock (WAITS_FOR)
+                    edges.push({
+                        from: t1,
+                        to: lockName,
+                        label: "WAITS FOR",
+                        color: { color: "#ef4444", highlight: "#f87171" },
+                        arrows: "to",
+                        width: 2.5,
+                        dashes: false,
+                        font: { color: "#f87171", size: 10, face: "JetBrains Mono", strokeWidth: 0 }
+                    });
+
+                    // Edge from Lock -> Owner Thread (HOLDS)
+                    edges.push({
+                        from: lockName,
+                        to: t2,
+                        label: "HOLDS",
+                        color: { color: "#ef4444", highlight: "#f87171" },
+                        arrows: "to",
+                        width: 2.5,
+                        dashes: false,
+                        font: { color: "#f87171", size: 10, face: "JetBrains Mono", strokeWidth: 0 }
+                    });
+                });
+            }
+
+            if (data.pinning && data.pinning.length > 0) {
+                data.pinning.forEach(p => {
+                    addNode(p.virtualThread, `🧵 ${p.virtualThread}`, "thread", {
+                        bg: "#1e3a8a", border: "#3b82f6", highlightBg: "#2563eb", highlightBorder: "#60a5fa"
+                    });
+                    addNode(p.carrierThread, `⚙️ ${p.carrierThread}`, "carrier", {
+                        bg: "#581c87", border: "#a855f7", highlightBg: "#7e22ce", highlightBorder: "#c084fc", shadow: "rgba(168,85,247,0.4)"
+                    });
+
+                    edges.push({
+                        from: p.virtualThread,
+                        to: p.carrierThread,
+                        label: "PINS",
+                        color: { color: "#f59e0b", highlight: "#fbbf24" },
+                        arrows: "to",
+                        width: 2,
+                        dashes: true,
+                        font: { color: "#fbbf24", size: 10, face: "JetBrains Mono", strokeWidth: 0 }
+                    });
+                });
+            }
+
+            const container = document.getElementById("graph-container");
+            const graphData = {
+                nodes: new vis.DataSet(nodes),
+                edges: new vis.DataSet(edges)
+            };
+
+            const options = {
+                physics: {
+                    solver: "forceAtlas2Based",
+                    forceAtlas2Based: {
+                        gravitationalConstant: -70,
+                        centralGravity: 0.01,
+                        springLength: 160,
+                        springConstant: 0.08
+                    },
+                    stabilization: { iterations: 100 }
+                },
+                interaction: {
+                    hover: true,
+                    tooltipDelay: 100
+                }
+            };
+
+            if (!network) {
+                network = new vis.Network(container, graphData, options);
+            } else {
+                network.setData(graphData);
+            }
+        }
+
+        // Initial Load
+        fetchStatus();
+        setInterval(fetchStatus, 3000);
+    </script>
+</body>
+</html>

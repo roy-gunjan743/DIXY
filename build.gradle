@@ -41,6 +41,7 @@ dependencies {
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
     implementation "org.springframework.boot:spring-boot-starter-security"
+    implementation 'org.springframework.shell:spring-shell-starter:3.4.0'
 
 }
 bootJar {
