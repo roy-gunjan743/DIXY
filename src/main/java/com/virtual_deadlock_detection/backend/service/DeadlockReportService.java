@@ -47,7 +47,10 @@ public class DeadlockReportService {
                 entity.isResolved(),
                 entity.getAnalysisTimeMicros(),
                 entity.getDetectedAt(),
-                threads
+                threads,
+                entity.getAppName(),
+                entity.getInstanceId(),
+                entity.getDetectionStrategy()
         );
     }
 }
