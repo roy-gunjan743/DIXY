@@ -23,4 +23,10 @@ public class DeadlockReportDTO {
     private LocalDateTime detectedAt;
 
     private List<String> threads;
+
+    private String appName;
+
+    private String instanceId;
+
+    private String detectionStrategy;
 }
