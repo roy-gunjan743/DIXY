@@ -11,5 +11,17 @@ public class AgentDeadlockDTO {
 
     private Long analysisTimeMicros;
 
-    private List<Long> threadIds;
+    private String appName;
+
+    private String instanceId;
+
+    private String detectionStrategy;
+
+    private List<ThreadRef> threads;
+
+    @Data
+    public static class ThreadRef {
+        private Long id;
+        private String name;
+    }
 }
