@@ -25,6 +25,8 @@ public class ThreadEntity {
     @Column(nullable = false,unique = true)
     private Long threadId;
 
+    private String appName;
+
     @Column(nullable = false)
     private String threadName;
 
