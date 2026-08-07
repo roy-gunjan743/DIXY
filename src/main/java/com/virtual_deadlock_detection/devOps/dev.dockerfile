@@ -1,4 +1,18 @@
-# ---- Stage 1: Build the app with Gradle ----
+# ---- Stage 1: Build the native JVMTI bridge ----
+FROM eclipse-temurin:21-jdk AS native-build
+WORKDIR /app
+
+RUN DEBIAN_FRONTEND=noninteractive apt-get update \
+    && apt-get install -y --no-install-recommends cmake g++ make \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY native native
+# Output lands in src/main/resources/native/<os>-<arch>/... directly, so it
+# gets picked up as a normal resource by the Gradle build in the next stage.
+RUN cmake -S native -B native/build -DCMAKE_BUILD_TYPE=Release \
+    && cmake --build native/build --config Release
+
+# ---- Stage 2: Build the app with Gradle (native lib already in resources) ----
 FROM eclipse-temurin:21-jdk AS build
 WORKDIR /app
 
@@ -8,21 +22,11 @@ COPY gradle gradle
 COPY build.gradle settings.gradle ./
 RUN chmod +x gradlew
 
-# Copy source code and build the jars (skip tests for faster image build)
+# Copy source code, then overlay the native lib built in Stage 1 so it's
+# present in src/main/resources before Gradle packages the jars.
 COPY src src
+COPY --from=native-build /app/src/main/resources/native src/main/resources/native
 RUN ./gradlew bootJar jar --no-daemon -x test
-
-# ---- Stage 2: Build the native JVMTI bridge ----
-FROM eclipse-temurin:21-jdk AS native-build
-WORKDIR /native
-
-RUN DEBIAN_FRONTEND=noninteractive apt-get update \
-    && apt-get install -y --no-install-recommends cmake g++ make \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY native .
-RUN cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
-    && cmake --build build --config Release
 
 # ---- Stage 3: Run the app on a lightweight JRE ----
 FROM eclipse-temurin:21-jre AS run
@@ -30,7 +34,6 @@ WORKDIR /app
 
 COPY --from=build /app/build/libs/virtual_deadlock_detection-*-SNAPSHOT.jar app.jar
 COPY --from=build /app/build/libs/virtual_deadlock_detection-*-SNAPSHOT-plain.jar agent.jar
-COPY --from=native-build /native/build/libvirtual_deadlock_agent.so /app/native/libvirtual_deadlock_agent.so
 
 EXPOSE 8080
-ENTRYPOINT ["java", "-Djava.library.path=/app/native", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-jar", "app.jar"]
