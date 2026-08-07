@@ -1,9 +1,11 @@
+import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 plugins {
     id 'java'
     id 'maven-publish'
     id 'org.springframework.boot' version '4.1.0'
     id 'io.spring.dependency-management' version '1.1.7'
     id 'org.jetbrains.kotlin.jvm'
+    id 'com.gradleup.shadow' version '8.3.5'
 }
 
 group = 'com.dixy'
@@ -18,6 +20,10 @@ java {
 
 repositories {
     mavenCentral()
+}
+
+configurations {
+    agentRuntime
 }
 
 dependencies {
@@ -44,6 +50,12 @@ dependencies {
     implementation "org.springframework.boot:spring-boot-starter-security"
     implementation 'org.springframework.shell:spring-shell-starter:3.4.0'
 
+    // Minimal runtime for the standalone -javaagent jar only — deliberately
+    // NOT the full runtimeClasspath, since the agent attaches to someone
+    // else's bare `java -jar` and shouldn't drag in JPA/Redis/Security/etc.
+    agentRuntime 'org.slf4j:slf4j-api:2.0.16'
+    agentRuntime 'org.slf4j:slf4j-simple:2.0.16'
+    agentRuntime 'jakarta.annotation:jakarta.annotation-api:2.1.1'
 }
 bootJar {
     archiveClassifier = ''
@@ -51,8 +63,22 @@ bootJar {
 
 jar {
     enabled = true
+
     archiveClassifier = 'plain'
 
+    manifest {
+        attributes(
+                "Premain-Class": "com.virtual_deadlock_detection.LockDetectionAgent.agent.VirtualDeadlockAgent",
+                "Can-Redefine-Classes": "true",
+                "Can-Retransform-Classes": "true"
+        )
+    }
+}
+
+tasks.register('agentJar', ShadowJar) {
+    archiveClassifier = 'agent'
+    from sourceSets.main.output
+    configurations = [project.configurations.agentRuntime]
     manifest {
         attributes(
                 "Premain-Class": "com.virtual_deadlock_detection.LockDetectionAgent.agent.VirtualDeadlockAgent",
@@ -86,10 +112,13 @@ publishing {
             artifactId = 'virtual-deadlock-detection'
             version = project.version
 
-            // Also attach the runnable Spring Boot fat jar as an extra
-            // artifact with a "boot" classifier so both are available.
+            // Also attach the runnable Spring Boot fat jar, and the
+            // standalone -javaagent jar, as extra artifacts.
             artifact(bootJar) {
                 classifier = 'boot'
+            }
+            artifact(agentJar) {
+                classifier = 'agent'
             }
         }
     }
