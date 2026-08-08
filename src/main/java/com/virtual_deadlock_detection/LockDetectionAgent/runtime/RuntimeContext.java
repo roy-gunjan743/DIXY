@@ -24,5 +24,8 @@ public final class RuntimeContext {
                     WAITING,
                     GRAPH,
                     DETECTOR
+
             );
+    /** No-op by default; DetectionPipelineLifecycle swaps this in on startup. */
+    public static volatile DeadlockReportSink REPORT_SINK = cycle -> { };
 }

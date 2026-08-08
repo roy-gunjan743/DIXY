@@ -11,6 +11,11 @@ import com.virtual_deadlock_detection.graph.model.NodeType;
 import com.virtual_deadlock_detection.graph.registry.WaitForGraph;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 import java.util.List;
 
@@ -19,6 +24,9 @@ public class GraphGateway {
     private static final Logger log = LoggerFactory.getLogger(GraphGateway.class);
     private final WaitForGraph waitForGraph;
     private final DeadlockDetector detector = RuntimeContext.DETECTOR;
+
+    private final Map<String, Instant> reportedCycles = new ConcurrentHashMap<>();
+    private static final Duration REPORT_COOLDOWN = Duration.ofSeconds(30);
 
     public GraphGateway(WaitForGraph waitForGraph) {
         this.waitForGraph = waitForGraph;
@@ -154,11 +162,20 @@ public class GraphGateway {
 
     private void detectDeadlocks() {
         List<DeadlockCycle> cycles = detector.detect(waitForGraph);
-        if (!cycles.isEmpty()) {
-            for (DeadlockCycle cycle : cycles) {
+        for (DeadlockCycle cycle : cycles) {
+            String signature = cycle.getEdgesInCycle().stream()
+                    .map(e -> e.getSource().getId() + "->" + e.getTarget().getId())
+                    .sorted()
+                    .collect(Collectors.joining("|"));
+
+            Instant last = reportedCycles.get(signature);
+            Instant now = Instant.now();
+            if (last == null || Duration.between(last, now).compareTo(REPORT_COOLDOWN) > 0) {
+                reportedCycles.put(signature, now);
                 log.debug("Deadlock detected cycle: {}", cycle);
+                RuntimeContext.REPORT_SINK.report(cycle);
             }
         }
     }
 }
-
+
