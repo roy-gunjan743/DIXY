@@ -11,4 +11,5 @@ public interface ThreadRepository extends JpaRepository<ThreadEntity,Long> {
 
     Optional<ThreadEntity> findByThreadId(Long threadID);
     Optional<ThreadEntity> findByThreadName(String threadName);
+    Optional<ThreadEntity> findByThreadIdAndAppName(Long threadId, String appName);
 }

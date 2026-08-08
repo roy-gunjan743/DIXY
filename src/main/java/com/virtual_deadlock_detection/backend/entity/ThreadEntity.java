@@ -16,14 +16,17 @@ import com.virtual_deadlock_detection.backend.enums.ThreadState;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(name = "threads")
+@Table(name = "threads",
+        uniqueConstraints = @UniqueConstraint(columnNames = {"threadId", "appName"}))
 public class ThreadEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false,unique = true)
+    @Column(nullable = false)
     private Long threadId;
+
+    private String appName;
 
     @Column(nullable = false)
     private String threadName;

@@ -4,6 +4,7 @@ import com.virtual_deadlock_detection.backend.dto.AgentDeadlockDTO;
 import com.virtual_deadlock_detection.backend.entity.DeadlockNodeEntity;
 import com.virtual_deadlock_detection.backend.entity.DeadlockReportEntity;
 import com.virtual_deadlock_detection.backend.entity.ThreadEntity;
+import com.virtual_deadlock_detection.backend.enums.ThreadState;
 import com.virtual_deadlock_detection.backend.repository.DeadlockReportRepository;
 import com.virtual_deadlock_detection.backend.repository.ThreadRepository;
 import org.springframework.stereotype.Service;
@@ -32,19 +33,26 @@ public class AgentDeadlockService {
         report.setSeverity(dto.getSeverity());
         report.setResolved(false);
         report.setAnalysisTimeMicros(dto.getAnalysisTimeMicros());
+        report.setAppName(dto.getAppName());
+        report.setInstanceId(dto.getInstanceId());
+        report.setDetectionStrategy(dto.getDetectionStrategy());
 
         List<DeadlockNodeEntity> nodes = new ArrayList<>();
 
         int order = 1;
 
-        for (Long threadId : dto.getThreadIds()) {
+        for (AgentDeadlockDTO.ThreadRef ref : dto.getThreads()) {
 
-            ThreadEntity thread =
-                    threadRepository.findByThreadId(threadId)
-                            .orElse(null);
-
-            if (thread == null)
-                continue;
+            ThreadEntity thread = threadRepository
+                    .findByThreadIdAndAppName(ref.getId(), dto.getAppName())
+                    .orElseGet(() -> {
+                        ThreadEntity t = new ThreadEntity();
+                        t.setThreadId(ref.getId());
+                        t.setThreadName(ref.getName());
+                        t.setAppName(dto.getAppName());
+                        t.setState(ThreadState.BLOCKED);
+                        return threadRepository.save(t);
+                    });
 
             DeadlockNodeEntity node = new DeadlockNodeEntity();
 

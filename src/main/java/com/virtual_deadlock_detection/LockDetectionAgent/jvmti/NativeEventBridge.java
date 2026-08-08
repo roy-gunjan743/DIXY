@@ -3,11 +3,14 @@ package com.virtual_deadlock_detection.LockDetectionAgent.jvmti;
 import com.virtual_deadlock_detection.LockDetectionAgent.collector.EventCollector;
 import com.virtual_deadlock_detection.LockDetectionAgent.dto.EventDTO;
 import com.virtual_deadlock_detection.LockDetectionAgent.events.EventType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.LocalDateTime;
 
 public class NativeEventBridge {
 
+    private static final Logger log = LoggerFactory.getLogger(NativeEventBridge.class);
     private static final EventCollector collector =
             new EventCollector();
 
@@ -39,12 +42,7 @@ public class NativeEventBridge {
 
         collector.collect(dto);
 
-        System.out.println("--------------------------------");
-        System.out.println("JVMTI -> Java");
-        System.out.println("Waiting Thread : " + waitingThreadName);
-        System.out.println("Owner Thread   : " + ownerThreadName);
-        System.out.println("Lock Address   : " + lockAddress);
-        System.out.println("--------------------------------");
+        log.debug("JVMTI -> Java: Waiting Thread: {}, Owner Thread: {}, Lock Address: {}", waitingThreadName, ownerThreadName, lockAddress);
     }
     public static void publishLockReleased(
             long threadId,
@@ -63,10 +61,6 @@ public class NativeEventBridge {
 
         collector.collect(dto);
 
-        System.out.println("--------------------------------");
-        System.out.println("Lock Released");
-        System.out.println("Thread : " + threadId);
-        System.out.println("Lock   : " + lockAddress);
-        System.out.println("--------------------------------");
+        log.debug("Lock Released - Thread: {}, Lock: {}", threadId, lockAddress);
     }
-}
+}

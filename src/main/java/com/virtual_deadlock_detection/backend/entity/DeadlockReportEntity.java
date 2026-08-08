@@ -23,6 +23,12 @@ public class DeadlockReportEntity {
 
     private Long analysisTimeMicros;
 
+    private String appName;
+
+    private String instanceId;
+
+    private String detectionStrategy;
+
     @Column(nullable = false)
     private LocalDateTime detectedAt;
 

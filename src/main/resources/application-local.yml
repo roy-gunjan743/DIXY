@@ -1,0 +1,22 @@
+# Local developer override — NOT committed to source control
+# Place this file at project root and run: java -jar build/libs/...jar
+# Spring Boot auto-loads application-local.yml when spring.profiles.active=local
+
+spring:
+  shell:
+    interactive:
+      enabled: true
+
+  datasource:
+    url: jdbc:postgresql://localhost:5433/virtual_deadlock_detection
+    username: postgres
+    password: gupi@1234
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+server:
+  port: 8081
+
