@@ -11,8 +11,8 @@ import java.time.LocalDateTime;
 public class NativeEventBridge {
 
     private static final Logger log = LoggerFactory.getLogger(NativeEventBridge.class);
-    private static final EventCollector collector =
-            new EventCollector();
+    private static final EventCollector collector = new EventCollector();
+    private static final ThreadLocal<Boolean> IN_BRIDGE = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
     /**
      * Called from JVMTI through JNI whenever
@@ -26,41 +26,49 @@ public class NativeEventBridge {
             long lockAddress,
             long timestamp) {
 
-        EventDTO dto = new EventDTO();
+        if (Boolean.TRUE.equals(IN_BRIDGE.get())) {
+            return;
+        }
+        IN_BRIDGE.set(Boolean.TRUE);
+        try {
+            EventDTO dto = new EventDTO();
+            dto.setEventType(EventType.LOCK_OWNED);
+            dto.setThreadId(waitingThreadId);
+            dto.setThreadName(waitingThreadName);
+            dto.setOwnerThreadId(ownerThreadId);
+            dto.setOwnerThreadName(ownerThreadName);
+            dto.setLockAddress(lockAddress);
+            dto.setTimestamp(LocalDateTime.now());
 
-        dto.setEventType(EventType.LOCK_OWNED);
-
-        dto.setThreadId(waitingThreadId);
-        dto.setThreadName(waitingThreadName);
-
-        dto.setOwnerThreadId(ownerThreadId);
-        dto.setOwnerThreadName(ownerThreadName);
-
-        dto.setLockAddress(lockAddress);
-
-        dto.setTimestamp(LocalDateTime.now());
-
-        collector.collect(dto);
-
-        log.debug("JVMTI -> Java: Waiting Thread: {}, Owner Thread: {}, Lock Address: {}", waitingThreadName, ownerThreadName, lockAddress);
+            collector.collect(dto);
+        } catch (Throwable t) {
+            // Defensive: do not propagate errors back to JVMTI callback thread
+        } finally {
+            IN_BRIDGE.set(Boolean.FALSE);
+        }
     }
+
     public static void publishLockReleased(
             long threadId,
             long lockAddress,
             long timestamp) {
 
-        EventDTO dto = new EventDTO();
+        if (Boolean.TRUE.equals(IN_BRIDGE.get())) {
+            return;
+        }
+        IN_BRIDGE.set(Boolean.TRUE);
+        try {
+            EventDTO dto = new EventDTO();
+            dto.setEventType(EventType.LOCK_RELEASE);
+            dto.setThreadId(threadId);
+            dto.setLockAddress(lockAddress);
+            dto.setTimestamp(LocalDateTime.now());
 
-        dto.setEventType(EventType.LOCK_RELEASE);
-
-        dto.setThreadId(threadId);
-
-        dto.setLockAddress(lockAddress);
-
-        dto.setTimestamp(LocalDateTime.now());
-
-        collector.collect(dto);
-
-        log.debug("Lock Released - Thread: {}, Lock: {}", threadId, lockAddress);
+            collector.collect(dto);
+        } catch (Throwable t) {
+            // Defensive: do not propagate errors back to JVMTI callback thread
+        } finally {
+            IN_BRIDGE.set(Boolean.FALSE);
+        }
     }
 }
