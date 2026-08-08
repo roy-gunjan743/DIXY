@@ -100,6 +100,11 @@ tasks.named('test') {
 
 tasks.named('bootRun') {
     jvmArgs += ['-Duser.timezone=UTC']
+    systemProperties = System.properties
+    standardInput = System.in
+    if (project.hasProperty('springArgs')) {
+        args project.getProperty('springArgs').split(',')
+    }
 }
 
 publishing {

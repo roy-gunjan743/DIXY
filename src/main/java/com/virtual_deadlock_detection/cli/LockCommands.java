@@ -36,6 +36,7 @@ import java.util.Optional;
  */
 @Component
 @Transactional
+@Command(group = "Lock Commands")
 public class LockCommands {
 
     private static final Logger log = LoggerFactory.getLogger(LockCommands.class);

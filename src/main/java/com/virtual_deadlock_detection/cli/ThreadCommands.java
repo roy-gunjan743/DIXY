@@ -36,6 +36,7 @@ import java.util.Optional;
  */
 @Component
 @Transactional
+@Command(group = "Thread Commands")
 public class ThreadCommands {
 
     private static final Logger log = LoggerFactory.getLogger(ThreadCommands.class);

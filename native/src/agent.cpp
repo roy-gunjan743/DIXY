@@ -48,6 +48,12 @@ static std::atomic<jlong> g_nextMonitorId{1};
 // Guards the check-then-set race when two threads contend the same
 // monitor (or reference the same thread object) at the same instant.
 static std::mutex g_tagMutex;
+static thread_local bool t_insideCallback = false;
+
+struct CallbackGuard {
+    CallbackGuard() { t_insideCallback = true; }
+    ~CallbackGuard() { t_insideCallback = false; }
+};
 
 /*
  * ============================================================
@@ -123,11 +129,15 @@ static void JNICALL MonitorContendedEnter(
         jthread thread,
         jobject object) {
 
+    if (t_insideCallback) {
+        return;
+    }
+    CallbackGuard guard;
+
     // 1. Get the real current owner of the monitor.
     jvmtiMonitorUsage usage{};
     jvmtiError err = jvmti_env->GetObjectMonitorUsage(object, &usage);
     if (err != JVMTI_ERROR_NONE) {
-        std::cout << "[JVMTI] GetObjectMonitorUsage failed, err=" << err << std::endl;
         return;
     }
 
@@ -152,7 +162,6 @@ static void JNICALL MonitorContendedEnter(
     jlong lockAddress     = getOrAssignTag(jvmti_env, object, g_nextMonitorId);
 
     if (waitingThreadId < 0 || ownerThreadId < 0 || lockAddress < 0) {
-        std::cout << "[JVMTI] Failed to assign tags, dropping event" << std::endl;
         return;
     }
 
@@ -164,15 +173,9 @@ static void JNICALL MonitorContendedEnter(
 
     jlong timestamp = currentTimestampMillis();
 
-    std::cout << "[JVMTI] LockOwned event: waiting="
-              << waitingThreadName << "(" << waitingThreadId << ") owner="
-              << ownerThreadName << "(" << ownerThreadId << ") lock="
-              << lockAddress << std::endl;
-
     // 4. Forward straight to Java via publishLockOwned(...). No local
     //    decision-making about deadlocks happens here.
     if (g_bridgeClass == nullptr || g_publishLockOwnedId == nullptr) {
-        std::cout << "[JVMTI] Bridge class/method not initialized, dropping event" << std::endl;
         return;
     }
 
@@ -191,7 +194,6 @@ static void JNICALL MonitorContendedEnter(
     );
 
     if (jni_env->ExceptionCheck()) {
-        std::cout << "[JVMTI] Exception thrown while calling publishLockOwned" << std::endl;
         jni_env->ExceptionDescribe();
         jni_env->ExceptionClear();
     }
@@ -211,10 +213,12 @@ static void JNICALL MonitorContendedEntered(
         jthread thread,
         jobject object) {
 
-    std::cout << "[JVMTI] MonitorContendedEntered" << std::endl;
+    if (t_insideCallback) {
+        return;
+    }
+    CallbackGuard guard;
 
     if (g_bridgeClass == nullptr || g_publishLockReleasedId == nullptr) {
-        std::cout << "[JVMTI] Bridge class/method not initialized, dropping event" << std::endl;
         return;
     }
 
@@ -226,14 +230,10 @@ static void JNICALL MonitorContendedEntered(
     jlong lockAddress = getOrAssignTag(jvmti_env, object, g_nextMonitorId);
 
     if (threadId < 0 || lockAddress < 0) {
-        std::cout << "[JVMTI] Failed to resolve tags, dropping event" << std::endl;
         return;
     }
 
     jlong timestamp = currentTimestampMillis();
-
-    std::cout << "[JVMTI] LockReleased event (wait edge removed): thread="
-              << threadId << " lock=" << lockAddress << std::endl;
 
     jni_env->CallStaticVoidMethod(
         g_bridgeClass,
@@ -244,32 +244,9 @@ static void JNICALL MonitorContendedEntered(
     );
 
     if (jni_env->ExceptionCheck()) {
-        std::cout << "[JVMTI] Exception thrown while calling publishLockReleased" << std::endl;
         jni_env->ExceptionDescribe();
         jni_env->ExceptionClear();
     }
-}
-
-// Thread starts waiting on Object.wait()
-static void JNICALL MonitorWait(
-        jvmtiEnv* jvmti_env,
-        JNIEnv* jni_env,
-        jthread thread,
-        jobject object,
-        jlong timeout) {
-
-    std::cout << "[JVMTI] MonitorWait" << std::endl;
-}
-
-// Thread wakes from Object.wait()
-static void JNICALL MonitorWaited(
-        jvmtiEnv* jvmti_env,
-        JNIEnv* jni_env,
-        jthread thread,
-        jobject object,
-        jboolean timed_out) {
-
-    std::cout << "[JVMTI] MonitorWaited" << std::endl;
 }
 
 /*
@@ -293,13 +270,11 @@ Java_com_virtual_1deadlock_1detection_LockDetectionAgent_jvmti_JvmtiBridge_initi
         return;
     }
 
-    std::cout << "[JVMTI] Initialized Successfully" << std::endl;
-
     /*
      * ------------------------------------------------------------
      * Enable Capabilities
      * ------------------------------------------------------------
-     * can_generate_monitor_events -> contended enter/entered/wait/waited
+     * can_generate_monitor_events -> contended enter/entered
      * can_tag_objects             -> stable IDs via SetTag/GetTag
      * can_get_monitor_info        -> GetObjectMonitorUsage (real owner thread)
      * ------------------------------------------------------------
@@ -315,8 +290,6 @@ Java_com_virtual_1deadlock_1detection_LockDetectionAgent_jvmti_JvmtiBridge_initi
         std::cout << "[JVMTI] Failed To Add Capabilities, err=" << capError << std::endl;
         return;
     }
-
-    std::cout << "[JVMTI] Monitor Capabilities Enabled" << std::endl;
 
     /*
      * ------------------------------------------------------------
@@ -355,8 +328,6 @@ Java_com_virtual_1deadlock_1detection_LockDetectionAgent_jvmti_JvmtiBridge_initi
         return;
     }
 
-    std::cout << "[JVMTI] Bridge class and method resolved" << std::endl;
-
     /*
      * ------------------------------------------------------------
      * Register Callbacks
@@ -366,16 +337,12 @@ Java_com_virtual_1deadlock_1detection_LockDetectionAgent_jvmti_JvmtiBridge_initi
     jvmtiEventCallbacks callbacks{};
     callbacks.MonitorContendedEnter = &MonitorContendedEnter;
     callbacks.MonitorContendedEntered = &MonitorContendedEntered;
-    callbacks.MonitorWait = &MonitorWait;
-    callbacks.MonitorWaited = &MonitorWaited;
 
     jvmtiError callbackError = jvmti->SetEventCallbacks(&callbacks, sizeof(callbacks));
     if (callbackError != JVMTI_ERROR_NONE) {
         std::cout << "[JVMTI] Failed To Register Callbacks, err=" << callbackError << std::endl;
         return;
     }
-
-    std::cout << "[JVMTI] Callbacks Registered" << std::endl;
 
     /*
      * ------------------------------------------------------------
@@ -385,11 +352,8 @@ Java_com_virtual_1deadlock_1detection_LockDetectionAgent_jvmti_JvmtiBridge_initi
 
     jvmti->SetEventNotificationMode(JVMTI_ENABLE, JVMTI_EVENT_MONITOR_CONTENDED_ENTER, nullptr);
     jvmti->SetEventNotificationMode(JVMTI_ENABLE, JVMTI_EVENT_MONITOR_CONTENDED_ENTERED, nullptr);
-    jvmti->SetEventNotificationMode(JVMTI_ENABLE, JVMTI_EVENT_MONITOR_WAIT, nullptr);
-    jvmti->SetEventNotificationMode(JVMTI_ENABLE, JVMTI_EVENT_MONITOR_WAITED, nullptr);
 
-    std::cout << "[JVMTI] Monitor Events Enabled" << std::endl;
-    std::cout << "[JVMTI] Agent Ready — pure event collector mode (no native deadlock detection)" << std::endl;
+    std::cout << "[JVMTI] Monitor Capabilities & Events Enabled" << std::endl;
 }
 
 /*
