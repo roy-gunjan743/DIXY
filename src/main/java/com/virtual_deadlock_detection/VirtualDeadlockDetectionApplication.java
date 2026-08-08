@@ -7,7 +7,7 @@ import org.springframework.shell.command.annotation.CommandScan;
 import java.util.TimeZone;
 
 @SpringBootApplication
-@CommandScan // required for Spring Shell 3.x's @Command annotation model to be discovered — see DeadlockCommands
+@CommandScan("com.virtual_deadlock_detection.cli")// required for Spring Shell 3.x's @Command annotation model to be discovered — see DeadlockCommands
 public class VirtualDeadlockDetectionApplication {
 
     public static void main(String[] args) {
