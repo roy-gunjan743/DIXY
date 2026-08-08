@@ -11,6 +11,26 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ---
+## 📑 Table of Contents
+
+1. [Quick Start](#-quick-start)
+2. [What's New](#-whats-new)
+3. [Key Features](#-key-features)
+4. [Prerequisites](#-prerequisites)
+5. [Project Architecture Overview](#-project-architecture-overview)
+6. [How Detection Works](#-how-detection-works)
+7. [Local Development & Testing](#-local-development--testing)
+8. [Interactive CLI (Spring Shell)](#-interactive-cli-spring-shell)
+9. [Authentication & Security](#-authentication--security)
+10. [Running with Docker & Docker Compose](#-running-with-docker--docker-compose)
+11. [Deploying to Kubernetes (k8s)](#️-deploying-to-kubernetes-k8s)
+12. [Observability & Monitoring](#-observability--monitoring)
+13. [REST API Reference](#-rest-api-reference)
+14. [Continuous Integration](#-continuous-integration)
+15. [Evidence & Verification Logs](#-evidence--verification-logs)
+16. [License](#-license)
+
+---
 
 ## ⚡ Quick Start
 
@@ -75,26 +95,7 @@ application, building from source, Kubernetes deployment, or the CLI, see the se
 
 ---
 
-## 📑 Table of Contents
 
-1. [Quick Start](#-quick-start)
-2. [What's New](#-whats-new)
-3. [Key Features](#-key-features)
-4. [Prerequisites](#-prerequisites)
-5. [Project Architecture Overview](#-project-architecture-overview)
-6. [How Detection Works](#-how-detection-works)
-7. [Local Development & Testing](#-local-development--testing)
-8. [Interactive CLI (Spring Shell)](#-interactive-cli-spring-shell)
-9. [Authentication & Security](#-authentication--security)
-10. [Running with Docker & Docker Compose](#-running-with-docker--docker-compose)
-11. [Deploying to Kubernetes (k8s)](#️-deploying-to-kubernetes-k8s)
-12. [Observability & Monitoring](#-observability--monitoring)
-13. [REST API Reference](#-rest-api-reference)
-14. [Continuous Integration](#-continuous-integration)
-15. [Evidence & Verification Logs](#-evidence--verification-logs)
-16. [License](#-license)
-
----
 
 ## 🆕 What's New
 
