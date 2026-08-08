@@ -1,29 +1,42 @@
 package com.virtual_deadlock_detection.cli;
 
-import com.virtual_deadlock_detection.backend.entity.ThreadEntity;
-import com.virtual_deadlock_detection.backend.service.ThreadService;
+import com.virtual_deadlock_detection.backend.entity.LockEntity;
+import com.virtual_deadlock_detection.backend.service.LockService;
 
-import org.springframework.shell.standard.ShellComponent;
-import org.springframework.shell.standard.ShellMethod;
-import org.springframework.shell.standard.ShellOption;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
+import org.springframework.dao.EmptyResultDataAccessException;
+import org.springframework.shell.core.command.CommandContext;
+import org.springframework.shell.core.command.annotation.Command;
+import org.springframework.shell.core.command.annotation.Option;
+import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.PrintWriter;
 import java.util.List;
 import java.util.Optional;
 
 /**
- * CLI commands for inspecting and managing virtual threads stored in the database.
+ * CLI commands for inspecting and managing locks stored in the database.
  *
  * <pre>
- *   vdd:> threads list
- *   vdd:> threads get --thread-id 10023
- *   vdd:> threads delete --id 5
+ *   vdd:> locks list
+ *   vdd:> locks get --lock-id Monitor-2351897819504
+ *   vdd:> locks delete --id 3
  * </pre>
+ *
+ * <p>Built on the Spring Shell 4 command model ({@code @Command} / {@code @Option}).
+ * Output goes through {@link CommandContext#outputWriter()} rather than raw
+ * {@code System.out}, and database errors are caught and reported as a clean
+ * one-line message instead of a raw stack trace surfacing in the shell.</p>
  */
-@ShellComponent
+@Component
 @Transactional
-public class ThreadCommands {
+public class LockCommands {
 
+    private static final Logger log = LoggerFactory.getLogger(LockCommands.class);
+    private static final String GROUP = "Lock Commands";
 
     // ── ANSI colours ────────────────────────────────────────────────────────
     private static final String RESET  = "\u001B[0m";
@@ -34,109 +47,156 @@ public class ThreadCommands {
     private static final String CYAN   = "\u001B[36m";
     private static final String WHITE  = "\u001B[37m";
 
-    private final ThreadService threadService;
+    private final LockService lockService;
 
-    public ThreadCommands(ThreadService threadService) {
-        this.threadService = threadService;
+    public LockCommands(LockService lockService) {
+        this.lockService = lockService;
     }
 
     // ────────────────────────────────────────────────────────────────────────
-    // threads list
+    // locks list
     // ────────────────────────────────────────────────────────────────────────
 
     /**
-     * Lists all registered virtual threads from the database.
+     * Lists all locks currently held in the database.
      *
-     * <pre>vdd:> threads list</pre>
+     * <pre>vdd:> locks list</pre>
      */
-    @ShellMethod(value = "List all registered threads in the database", key = "threads list")
-    public String threadsList() {
-        List<ThreadEntity> threads = threadService.getAllThreads();
+    @Command(name = { "locks", "list" }, description = "List all locks in the database", group = GROUP)
+    public void locksList(CommandContext ctx) {
+        PrintWriter out = ctx.outputWriter();
+        try {
+            List<LockEntity> locks = lockService.getAllLocks();
 
-        if (threads.isEmpty()) {
-            return GREEN + "  No threads found in database." + RESET;
-        }
-
-        StringBuilder sb = new StringBuilder();
-        sb.append("\n").append(CYAN).append(BOLD)
-          .append(String.format("  %-6s  %-12s  %-35s  %-12s  %s\n",
-                  "DB ID", "THREAD ID", "NAME", "STATE", "CARRIER"))
-          .append(RESET);
-        sb.append(CYAN).append("  ").append("─".repeat(85)).append(RESET).append("\n");
-
-        for (ThreadEntity t : threads) {
-            String stateStr = t.getState() != null ? t.getState().name() : "-";
-            String stateColored;
-            switch (stateStr) {
-                case "BLOCKED":       stateColored = RED    + BOLD + stateStr + RESET; break;
-                case "WAITING":
-                case "TIMED_WAITING": stateColored = YELLOW + BOLD + stateStr + RESET; break;
-                case "RUNNABLE":      stateColored = GREEN  + stateStr + RESET;        break;
-                default:              stateColored = WHITE  + stateStr + RESET;
+            if (locks.isEmpty()) {
+                out.println(GREEN + "  No locks found in database." + RESET);
+                out.flush();
+                return;
             }
 
-            sb.append(String.format("  %-6d  %-12d  %-35s  %-12s  %s\n",
-                    t.getId(),
-                    t.getThreadId(),
-                    truncate(t.getThreadName(), 35),
-                    stateColored,
-                    t.getCarrierThread() != null ? t.getCarrierThread() : "-"));
-        }
+            StringBuilder sb = new StringBuilder();
+            sb.append("\n").append(CYAN).append(BOLD)
+                    .append(String.format("  %-6s  %-30s  %-22s  %s\n",
+                            "DB ID", "LOCK ID", "TYPE", "OWNER THREAD"))
+                    .append(RESET);
+            sb.append(CYAN).append("  ").append("─".repeat(80)).append(RESET).append("\n");
 
-        sb.append("\n").append(WHITE).append("  Total: ").append(RESET).append(threads.size()).append("\n");
-        return sb.toString();
+            for (LockEntity l : locks) {
+                String typeStr   = l.getLockType() != null ? l.getLockType() : "-";
+                String typeColor = typeStr.toLowerCase().contains("synchronized")
+                        ? YELLOW + BOLD + typeStr + RESET
+                        : WHITE + typeStr + RESET;
+
+                String owner = "-";
+                if (l.getOwnerThread() != null) {
+                    owner = l.getOwnerThread().getThreadName()
+                            + " (id=" + l.getOwnerThread().getThreadId() + ")";
+                }
+
+                sb.append(String.format("  %-6d  %-30s  %-22s  %s\n",
+                        l.getId(), truncate(l.getLockId(), 30), typeColor, owner));
+            }
+
+            sb.append("\n").append(WHITE).append("  Total: ").append(RESET).append(locks.size()).append("\n");
+            out.println(sb);
+            out.flush();
+        } catch (DataAccessException e) {
+            log.error("locks list command failed: database access error", e);
+            printError(out, "Unable to list locks — database is unreachable or query failed.");
+        }
     }
 
     // ────────────────────────────────────────────────────────────────────────
-    // threads get
+    // locks get
     // ────────────────────────────────────────────────────────────────────────
 
     /**
-     * Gets details of a single thread by its JVM thread-id.
+     * Gets details of a specific lock by its lock-id string.
      *
-     * <pre>vdd:> threads get --thread-id 10023</pre>
+     * <pre>vdd:> locks get --lock-id Monitor-2351897819504</pre>
      */
-    @ShellMethod(value = "Get a thread by JVM thread-id", key = "threads get")
-    public String threadsGet(
-            @ShellOption(value = {"--thread-id", "-t"}, help = "JVM thread ID (e.g. 10023)") Long threadId) {
+    @Command(name = { "locks", "get" }, description = "Get a lock by its lock-id string", group = GROUP)
+    public void locksGet(
+            CommandContext ctx,
+            @Option(shortName = 'l', longName = "lock-id", description = "Lock ID string (e.g. Monitor-2351897819504)") String lockId) {
 
-        Optional<ThreadEntity> opt = threadService.getThreadByThreadId(threadId);
-        if (opt.isEmpty()) {
-            return RED + "  Thread with threadId=" + threadId + " not found." + RESET;
+        PrintWriter out = ctx.outputWriter();
+
+        if (lockId == null || lockId.isBlank()) {
+            printError(out, "Missing required option: --lock-id (-l)");
+            return;
         }
 
-        ThreadEntity t = opt.get();
-        StringBuilder sb = new StringBuilder();
-        sb.append("\n").append(CYAN).append(BOLD).append("  Thread Details\n").append(RESET);
-        sb.append(CYAN).append("  ").append("─".repeat(40)).append(RESET).append("\n");
-        sb.append(WHITE).append("  DB ID       : ").append(RESET).append(t.getId()).append("\n");
-        sb.append(WHITE).append("  Thread ID   : ").append(RESET).append(t.getThreadId()).append("\n");
-        sb.append(WHITE).append("  Name        : ").append(RESET).append(t.getThreadName()).append("\n");
-        sb.append(WHITE).append("  State       : ").append(RESET)
-          .append(colorState(t.getState() != null ? t.getState().name() : "-")).append("\n");
-        sb.append(WHITE).append("  Carrier     : ").append(RESET)
-          .append(t.getCarrierThread() != null ? t.getCarrierThread() : "-").append("\n");
-        sb.append(WHITE).append("  Created At  : ").append(RESET)
-          .append(t.getCreatedAt() != null ? t.getCreatedAt() : "-").append("\n");
-        sb.append(WHITE).append("  Owned Locks : ").append(RESET)
-          .append(t.getOwnedLocks() != null ? t.getOwnedLocks().size() : 0).append("\n");
-        return sb.toString();
+        try {
+            Optional<LockEntity> opt = lockService.getLockByLockId(lockId);
+            if (opt.isEmpty()) {
+                out.println(RED + "  Lock with lockId='" + lockId + "' not found." + RESET);
+                out.flush();
+                return;
+            }
+
+            LockEntity l = opt.get();
+            StringBuilder sb = new StringBuilder();
+            sb.append("\n").append(CYAN).append(BOLD).append("  Lock Details\n").append(RESET);
+            sb.append(CYAN).append("  ").append("─".repeat(40)).append(RESET).append("\n");
+            sb.append(WHITE).append("  DB ID       : ").append(RESET).append(l.getId()).append("\n");
+            sb.append(WHITE).append("  Lock ID     : ").append(RESET).append(l.getLockId()).append("\n");
+            sb.append(WHITE).append("  Type        : ").append(RESET)
+                    .append(l.getLockType() != null
+                            ? (l.getLockType().toLowerCase().contains("synchronized")
+                            ? YELLOW + BOLD + l.getLockType() + RESET
+                            : l.getLockType())
+                            : "-").append("\n");
+
+            if (l.getOwnerThread() != null) {
+                sb.append(WHITE).append("  Owner       : ").append(RESET)
+                        .append(l.getOwnerThread().getThreadName())
+                        .append(" (threadId=").append(l.getOwnerThread().getThreadId()).append(")").append("\n");
+                sb.append(WHITE).append("  Owner State : ").append(RESET)
+                        .append(l.getOwnerThread().getState() != null ? l.getOwnerThread().getState().name() : "-").append("\n");
+            } else {
+                sb.append(WHITE).append("  Owner       : ").append(RESET).append("none\n");
+            }
+
+            out.println(sb);
+            out.flush();
+        } catch (DataAccessException e) {
+            log.error("locks get command failed: database access error", e);
+            printError(out, "Unable to fetch lock — database is unreachable or query failed.");
+        }
     }
 
     // ────────────────────────────────────────────────────────────────────────
-    // threads delete
+    // locks delete
     // ────────────────────────────────────────────────────────────────────────
 
     /**
-     * Deletes a thread by its database primary key.
+     * Deletes a lock by its database primary key.
      *
-     * <pre>vdd:> threads delete --id 5</pre>
+     * <pre>vdd:> locks delete --id 3</pre>
      */
-    @ShellMethod(value = "Delete a thread by its database ID", key = "threads delete")
-    public String threadsDelete(
-            @ShellOption(value = {"--id", "-i"}, help = "Database primary key of the thread") Long id) {
-        threadService.deleteThread(id);
-        return GREEN + BOLD + "\n  ✔  Thread with DB id=" + id + " deleted.\n" + RESET;
+    @Command(name = { "locks", "delete" }, description = "Delete a lock by its database ID", group = GROUP)
+    public void locksDelete(
+            CommandContext ctx,
+            @Option(shortName = 'i', longName = "id", description = "Database primary key of the lock") Long id) {
+
+        PrintWriter out = ctx.outputWriter();
+
+        if (id == null) {
+            printError(out, "Missing required option: --id (-i)");
+            return;
+        }
+
+        try {
+            lockService.deleteLock(id);
+            out.println(GREEN + BOLD + "\n  ✔  Lock with DB id=" + id + " deleted.\n" + RESET);
+            out.flush();
+        } catch (EmptyResultDataAccessException e) {
+            printError(out, "No lock found with DB id=" + id + " — nothing was deleted.");
+        } catch (DataAccessException e) {
+            log.error("locks delete command failed: database access error", e);
+            printError(out, "Unable to delete lock — database is unreachable or write failed.");
+        }
     }
 
     // ── helpers ─────────────────────────────────────────────────────────────
@@ -146,13 +206,8 @@ public class ThreadCommands {
         return s.length() > max ? s.substring(0, max - 1) + "…" : s;
     }
 
-    private String colorState(String state) {
-        switch (state) {
-            case "BLOCKED":       return RED    + BOLD + state + RESET;
-            case "WAITING":
-            case "TIMED_WAITING": return YELLOW + BOLD + state + RESET;
-            case "RUNNABLE":      return GREEN  + state + RESET;
-            default:              return WHITE  + state + RESET;
-        }
+    private void printError(PrintWriter out, String message) {
+        out.println(RED + BOLD + "  ✘  " + message + RESET);
+        out.flush();
     }
 }

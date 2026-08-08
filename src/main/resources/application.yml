@@ -65,6 +65,8 @@ spring:
   shell:
     interactive:
       enabled: true
+    noninteractive:
+      enabled: false
 
 ---
 # Web mode: dashboard/API only, shell disabled so it doesn't block the terminal
@@ -76,4 +78,6 @@ spring:
     web-application-type: servlet
   shell:
     interactive:
+      enabled: false
+    noninteractive:
       enabled: false
