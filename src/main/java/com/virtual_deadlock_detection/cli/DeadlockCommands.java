@@ -56,7 +56,6 @@ import java.util.List;
  */
 @Component
 @Transactional
-@Command(group = "Deadlock Commands")
 public class DeadlockCommands {
 
     private static final Logger log = LoggerFactory.getLogger(DeadlockCommands.class);
@@ -193,7 +192,7 @@ public class DeadlockCommands {
      *
      * <pre>vdd:> deadlocks list</pre>
      */
-    @Command(command = { "deadlocks", "list" }, alias = { "deadlock list", "deadlock" }, description = "List all stored deadlock reports", group = GROUP)
+    @Command(command = { "deadlocks", "list" }, description = "List all stored deadlock reports", group = GROUP)
     public void deadlocksList(CommandContext ctx) {
         PrintWriter out = ctx.getTerminal().writer();
         try {
@@ -244,7 +243,7 @@ public class DeadlockCommands {
      *
      * <pre>vdd:> deadlocks detect</pre>
      */
-    @Command(command = { "deadlocks", "detect" }, alias = { "deadlock detect" }, description = "Run live deadlock detection on the current WaitForGraph", group = GROUP)
+    @Command(command = { "deadlocks", "detect" }, description = "Run live deadlock detection on the current WaitForGraph", group = GROUP)
     public void deadlocksDetect(CommandContext ctx) {
         PrintWriter out = ctx.getTerminal().writer();
         try {
@@ -290,7 +289,7 @@ public class DeadlockCommands {
      *
      * <pre>vdd:> deadlocks seed</pre>
      */
-    @Command(command = { "deadlocks", "seed" }, alias = { "deadlock seed" }, description = "Seed the database with a demo 2-way deadlock scenario", group = GROUP)
+    @Command(command = { "deadlocks", "seed" }, description = "Seed the database with a demo 2-way deadlock scenario", group = GROUP)
     public void deadlocksSeed(CommandContext ctx) {
         PrintWriter out = ctx.getTerminal().writer();
         try {
@@ -334,7 +333,7 @@ public class DeadlockCommands {
      *
      * <pre>vdd:> deadlocks clear</pre>
      */
-    @Command(command = { "deadlocks", "clear" }, alias = { "deadlock clear", "clear-data" }, description = "Clear all threads, locks, and wait-edges from the database", group = GROUP)
+    @Command(command = { "deadlocks", "clear" }, description = "Clear all threads, locks, and wait-edges from the database", group = GROUP)
     public void deadlocksClear(CommandContext ctx) {
         PrintWriter out = ctx.getTerminal().writer();
         try {

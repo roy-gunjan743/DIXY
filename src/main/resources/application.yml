@@ -62,11 +62,6 @@ spring:
       on-profile: cli
   main:
     web-application-type: none
-  devtools:
-    restart:
-      enabled: false
-    livereload:
-      enabled: false
   shell:
     interactive:
       enabled: true
