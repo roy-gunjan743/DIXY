@@ -7,9 +7,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.EmptyResultDataAccessException;
-import org.springframework.shell.command.CommandContext;
-import org.springframework.shell.command.annotation.Command;
-import org.springframework.shell.command.annotation.Option;
+import org.springframework.shell.core.command.CommandContext;
+import org.springframework.shell.core.command.annotation.Command;
+import org.springframework.shell.core.command.annotation.Option;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,13 +26,12 @@ import java.util.Optional;
  *   vdd:> locks delete --id 3
  * </pre>
  *
- * <p>Built on the Spring Shell 3.4 command model ({@code @Command} / {@code @Option}
- * from {@code org.springframework.shell.command.annotation}). Output goes through
- * {@code ctx.getTerminal().writer()} rather than raw {@code System.out} — the
- * 3.x {@link CommandContext} has no {@code outputWriter()} shortcut (that was
- * added in Spring Shell 4's core module) — and database errors are caught and
- * reported as a clean one-line message instead of a raw stack trace surfacing
- * in the shell.</p>
+ * <p>Built on the Spring Shell 4.0 command model ({@code @Command} / {@code @Option}
+ * from {@code org.springframework.shell.core.command.annotation}). Output goes
+ * through {@code ctx.outputWriter()} rather than raw {@code System.out} — the
+ * 4.x {@link CommandContext} exposes the writer directly — and database errors
+ * are caught and reported as a clean one-line message instead of a raw stack
+ * trace surfacing in the shell.</p>
  */
 @Component
 @Transactional
@@ -65,9 +64,9 @@ public class LockCommands {
      *
      * <pre>vdd:> locks list</pre>
      */
-    @Command(command = { "locks", "list" }, description = "List all locks in the database", group = GROUP)
+    @Command(name = { "locks", "list" }, description = "List all locks in the database", group = GROUP)
     public void locksList(CommandContext ctx) {
-        PrintWriter out = ctx.getTerminal().writer();
+        PrintWriter out = ctx.outputWriter();
         try {
             List<LockEntity> locks = lockService.getAllLocks();
 
@@ -86,9 +85,10 @@ public class LockCommands {
 
             for (LockEntity l : locks) {
                 String typeStr   = l.getLockType() != null ? l.getLockType() : "-";
+                String typePadded = String.format("%-22s", typeStr);
                 String typeColor = typeStr.toLowerCase().contains("synchronized")
-                        ? YELLOW + BOLD + typeStr + RESET
-                        : WHITE + typeStr + RESET;
+                        ? YELLOW + BOLD + typePadded + RESET
+                        : WHITE + typePadded + RESET;
 
                 String owner = "-";
                 if (l.getOwnerThread() != null) {
@@ -96,7 +96,7 @@ public class LockCommands {
                             + " (id=" + l.getOwnerThread().getThreadId() + ")";
                 }
 
-                sb.append(String.format("  %-6d  %-30s  %-22s  %s\n",
+                sb.append(String.format("  %-6d  %-30s  %s  %s\n",
                         l.getId(), truncate(l.getLockId(), 30), typeColor, owner));
             }
 
@@ -118,12 +118,12 @@ public class LockCommands {
      *
      * <pre>vdd:> locks get --lock-id Monitor-2351897819504</pre>
      */
-    @Command(command = { "locks", "get" }, description = "Get a lock by its lock-id string", group = GROUP)
+    @Command(name = { "locks", "get" }, description = "Get a lock by its lock-id string", group = GROUP)
     public void locksGet(
             CommandContext ctx,
-            @Option(shortNames = 'l', longNames = "lock-id", description = "Lock ID string (e.g. Monitor-2351897819504)") String lockId) {
+            @Option(shortName = 'l', longName = "lock-id", description = "Lock ID string (e.g. Monitor-2351897819504)") String lockId) {
 
-        PrintWriter out = ctx.getTerminal().writer();
+        PrintWriter out = ctx.outputWriter();
 
         if (lockId == null || lockId.isBlank()) {
             printError(out, "Missing required option: --lock-id (-l)");
@@ -178,12 +178,12 @@ public class LockCommands {
      *
      * <pre>vdd:> locks delete --id 3</pre>
      */
-    @Command(command = { "locks", "delete" }, description = "Delete a lock by its database ID", group = GROUP)
+    @Command(name = { "locks", "delete" }, description = "Delete a lock by its database ID", group = GROUP)
     public void locksDelete(
             CommandContext ctx,
-            @Option(shortNames = 'i', longNames = "id", description = "Database primary key of the lock") Long id) {
+            @Option(shortName = 'i', longName = "id", description = "Database primary key of the lock") Long id) {
 
-        PrintWriter out = ctx.getTerminal().writer();
+        PrintWriter out = ctx.outputWriter();
 
         if (id == null) {
             printError(out, "Missing required option: --id (-i)");

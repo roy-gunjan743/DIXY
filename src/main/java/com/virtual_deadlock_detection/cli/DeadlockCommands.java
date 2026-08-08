@@ -24,8 +24,8 @@ import com.virtual_deadlock_detection.LockDetectionAgent.runtime.RuntimeContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
-import org.springframework.shell.command.CommandContext;
-import org.springframework.shell.command.annotation.Command;
+import org.springframework.shell.core.command.CommandContext;
+import org.springframework.shell.core.command.annotation.Command;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,15 +44,14 @@ import java.util.List;
  *   vdd:> deadlocks clear
  * </pre>
  *
- * <p>Built on the Spring Shell 3.4 command model ({@code @Command} from
- * {@code org.springframework.shell.command.annotation}, replacing the removed
- * {@code @ShellComponent}/{@code @ShellMethod}/{@code @ShellOption} annotations
- * from v2). Output goes through {@code ctx.getTerminal().writer()} rather than
- * raw {@code System.out} — the 3.x {@link CommandContext} has no
- * {@code outputWriter()} shortcut (that was added in Spring Shell 4's core
- * module) — which stays correctly wired to the active terminal/writer in both
- * interactive and non-interactive shell modes, and is what Spring Shell's own
- * test harness expects.</p>
+ * <p>Built on the Spring Shell 4.0 command model ({@code @Command} from
+ * {@code org.springframework.shell.core.command.annotation}, replacing the
+ * removed {@code @ShellComponent}/{@code @ShellMethod}/{@code @ShellOption}
+ * annotations from v2/v3). Output goes through {@code ctx.outputWriter()}
+ * rather than raw {@code System.out} — the 4.x {@link CommandContext} exposes
+ * the writer directly, which stays correctly wired to the active
+ * terminal/writer in both interactive and non-interactive shell modes, and is
+ * what Spring Shell's own test harness expects.</p>
  */
 @Component
 @Transactional
@@ -106,9 +105,9 @@ public class DeadlockCommands {
      *
      * <pre>vdd:> status</pre>
      */
-    @Command(command = "status", description = "Show full diagnostic status (HEALTHY / WARNING / CRITICAL)", group = GROUP)
+    @Command(name = "status", description = "Show full diagnostic status (HEALTHY / WARNING / CRITICAL)", group = GROUP)
     public void status(CommandContext ctx) {
-        PrintWriter out = ctx.getTerminal().writer();
+        PrintWriter out = ctx.outputWriter();
         try {
             long startNs = System.nanoTime();
 
@@ -192,9 +191,9 @@ public class DeadlockCommands {
      *
      * <pre>vdd:> deadlocks list</pre>
      */
-    @Command(command = { "deadlocks", "list" }, description = "List all stored deadlock reports", group = GROUP)
+    @Command(name = { "deadlocks", "list" }, description = "List all stored deadlock reports", group = GROUP)
     public void deadlocksList(CommandContext ctx) {
-        PrintWriter out = ctx.getTerminal().writer();
+        PrintWriter out = ctx.outputWriter();
         try {
             List<DeadlockReportDTO> reports = deadlockReportService.getAllReports();
 
@@ -213,14 +212,16 @@ public class DeadlockCommands {
 
             for (DeadlockReportDTO r : reports) {
                 String sev = r.getSeverity();
-                String sevColored = "CRITICAL".equalsIgnoreCase(sev) ? RED + BOLD + sev + RESET
-                        : "WARNING".equalsIgnoreCase(sev)  ? YELLOW + BOLD + sev + RESET
-                        : GREEN + sev + RESET;
-                String resolved = r.isResolved() ? GREEN + "YES" + RESET : YELLOW + "NO" + RESET;
+                String sevPadded = String.format("%-10s", sev);
+                String sevColored = "CRITICAL".equalsIgnoreCase(sev) ? RED + BOLD + sevPadded + RESET
+                        : "WARNING".equalsIgnoreCase(sev)  ? YELLOW + BOLD + sevPadded + RESET
+                        : GREEN + sevPadded + RESET;
+                String resolvedPadded = String.format("%-8s", r.isResolved() ? "YES" : "NO");
+                String resolved = r.isResolved() ? GREEN + resolvedPadded + RESET : YELLOW + resolvedPadded + RESET;
                 String threads   = r.getThreads() == null ? "-" : String.join(", ", r.getThreads());
 
-                sb.append(String.format("  %-6d  %s%-10s%s  %-8s  %-16s  %s\n",
-                        r.getId(), "", sevColored, "", resolved,
+                sb.append(String.format("  %-6d  %s  %s  %-16s  %s\n",
+                        r.getId(), sevColored, resolved,
                         r.getDetectedAt() != null ? r.getDetectedAt().toString() : "-",
                         threads));
             }
@@ -243,9 +244,9 @@ public class DeadlockCommands {
      *
      * <pre>vdd:> deadlocks detect</pre>
      */
-    @Command(command = { "deadlocks", "detect" }, description = "Run live deadlock detection on the current WaitForGraph", group = GROUP)
+    @Command(name = { "deadlocks", "detect" }, description = "Run live deadlock detection on the current WaitForGraph", group = GROUP)
     public void deadlocksDetect(CommandContext ctx) {
-        PrintWriter out = ctx.getTerminal().writer();
+        PrintWriter out = ctx.outputWriter();
         try {
             List<DeadlockCycle> cycles = graphService.detectDeadlocks();
 
@@ -289,9 +290,9 @@ public class DeadlockCommands {
      *
      * <pre>vdd:> deadlocks seed</pre>
      */
-    @Command(command = { "deadlocks", "seed" }, description = "Seed the database with a demo 2-way deadlock scenario", group = GROUP)
+    @Command(name = { "deadlocks", "seed" }, description = "Seed the database with a demo 2-way deadlock scenario", group = GROUP)
     public void deadlocksSeed(CommandContext ctx) {
-        PrintWriter out = ctx.getTerminal().writer();
+        PrintWriter out = ctx.outputWriter();
         try {
             waitEdgeRepository.deleteAll();
             lockRepository.deleteAll();
@@ -333,9 +334,9 @@ public class DeadlockCommands {
      *
      * <pre>vdd:> deadlocks clear</pre>
      */
-    @Command(command = { "deadlocks", "clear" }, description = "Clear all threads, locks, and wait-edges from the database", group = GROUP)
+    @Command(name = { "deadlocks", "clear" }, description = "Clear all threads, locks, and wait-edges from the database", group = GROUP)
     public void deadlocksClear(CommandContext ctx) {
-        PrintWriter out = ctx.getTerminal().writer();
+        PrintWriter out = ctx.outputWriter();
         try {
             waitEdgeRepository.deleteAll();
             lockRepository.deleteAll();

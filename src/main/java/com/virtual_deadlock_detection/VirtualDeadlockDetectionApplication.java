@@ -2,12 +2,13 @@ package com.virtual_deadlock_detection;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.shell.command.annotation.CommandScan;
 
 import java.util.TimeZone;
 
 @SpringBootApplication
-@CommandScan("com.virtual_deadlock_detection.cli")// required for Spring Shell 3.x's @Command annotation model to be discovered — see DeadlockCommands
+// Spring Shell 4: @CommandScan was removed — with Spring Boot, @Command
+// beans under com.virtual_deadlock_detection.cli are now discovered
+// automatically. See DeadlockCommands/LockCommands/ThreadCommands.
 public class VirtualDeadlockDetectionApplication {
 
     public static void main(String[] args) {
