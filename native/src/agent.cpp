@@ -385,8 +385,12 @@ Java_com_virtual_1deadlock_1detection_LockDetectionAgent_jvmti_JvmtiBridge_initi
 
     jvmti->SetEventNotificationMode(JVMTI_ENABLE, JVMTI_EVENT_MONITOR_CONTENDED_ENTER, nullptr);
     jvmti->SetEventNotificationMode(JVMTI_ENABLE, JVMTI_EVENT_MONITOR_CONTENDED_ENTERED, nullptr);
-    jvmti->SetEventNotificationMode(JVMTI_ENABLE, JVMTI_EVENT_MONITOR_WAIT, nullptr);
-    jvmti->SetEventNotificationMode(JVMTI_ENABLE, JVMTI_EVENT_MONITOR_WAITED, nullptr);
+    // MONITOR_WAIT / MONITOR_WAITED intentionally left disabled: they never
+    // call into Java (see MonitorWait/MonitorWaited above — they only
+    // std::cout), and they fire constantly on internal JVM/JFR threads,
+    // which was flooding the interactive shell's stdout and made the
+    // "vdd:>" prompt unusable. Re-enable only if you actually need to
+    // observe raw wait/notify traffic.
 
     std::cout << "[JVMTI] Monitor Events Enabled" << std::endl;
     std::cout << "[JVMTI] Agent Ready — pure event collector mode (no native deadlock detection)" << std::endl;
