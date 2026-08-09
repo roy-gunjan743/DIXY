@@ -2,8 +2,7 @@ package com.virtual_deadlock_detection.LockDetectionAgent.runtime;
 
 import com.virtual_deadlock_detection.graph.model.DeadlockCycle;
 import com.virtual_deadlock_detection.graph.model.GraphNode;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.virtual_deadlock_detection.LockDetectionAgent.logging.Logger;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -27,7 +26,7 @@ import java.util.StringJoiner;
  */
 public class RemoteReportSink implements DeadlockReportSink {
 
-    private static final Logger log = LoggerFactory.getLogger(RemoteReportSink.class);
+    private static final Logger log = Logger.getLogger(RemoteReportSink.class);
 
     private final String endpoint;
     private final String appName;
