@@ -15,9 +15,6 @@ import com.virtual_deadlock_detection.backend.entity.WaitEdgeEntity;
 import com.virtual_deadlock_detection.backend.enums.ThreadState;
 import com.virtual_deadlock_detection.graph.model.DeadlockCycle;
 import com.virtual_deadlock_detection.graph.model.GraphEdge;
-import com.virtual_deadlock_detection.graph.model.GraphNode;
-import com.virtual_deadlock_detection.graph.model.NodeType;
-import com.virtual_deadlock_detection.graph.model.EdgeType;
 import com.virtual_deadlock_detection.graph.registry.WaitForGraph;
 import com.virtual_deadlock_detection.LockDetectionAgent.runtime.RuntimeContext;
 
@@ -53,8 +50,16 @@ import java.util.List;
  * terminal/writer in both interactive and non-interactive shell modes, and is
  * what Spring Shell's own test harness expects.</p>
  */
+// NOTE: no class-level @Transactional here. A class-level @Transactional
+// forces Spring to wrap this bean in a CGLIB proxy, and Spring Shell 4's
+// command scanner registers commands off the raw bean it receives from the
+// context. If that bean is a proxy rather than the plain DeadlockCommands
+// instance, its @Command-annotated methods aren't reliably discovered — the
+// whole "deadlocks"/"status" group silently vanishes from `help` with no
+// error. (Compare EventCommands, which has no @Transactional and whose
+// commands do show up.) @Transactional is applied per-method below, only on
+// the two methods that actually need atomic multi-row writes.
 @Component
-@Transactional
 public class DeadlockCommands {
 
     private static final Logger log = LoggerFactory.getLogger(DeadlockCommands.class);
@@ -115,7 +120,9 @@ public class DeadlockCommands {
             List<LockEntity>     locks   = lockService.getAllLocks();
             List<WaitEdgeEntity> edges   = waitEdgeService.getAllEdges();
 
-            WaitForGraph graph = buildGraphFromDb(edges);
+            // Shared with "deadlocks detect" via GraphService.buildGraphFromDb()
+            // so both commands always agree on what's currently stored.
+            WaitForGraph graph = graphService.buildGraphFromDb();
             List<DeadlockCycle> cycles = RuntimeContext.DETECTOR.detect(graph);
 
             long pinnedCount = threads.stream()
@@ -291,6 +298,7 @@ public class DeadlockCommands {
      * <pre>vdd:> deadlocks seed</pre>
      */
     @Command(name = { "deadlocks", "seed" }, description = "Seed the database with a demo 2-way deadlock scenario", group = GROUP)
+    @Transactional
     public void deadlocksSeed(CommandContext ctx) {
         PrintWriter out = ctx.outputWriter();
         try {
@@ -335,6 +343,7 @@ public class DeadlockCommands {
      * <pre>vdd:> deadlocks clear</pre>
      */
     @Command(name = { "deadlocks", "clear" }, description = "Clear all threads, locks, and wait-edges from the database", group = GROUP)
+    @Transactional
     public void deadlocksClear(CommandContext ctx) {
         PrintWriter out = ctx.outputWriter();
         try {
@@ -352,23 +361,6 @@ public class DeadlockCommands {
     // ────────────────────────────────────────────────────────────────────────
     // Helpers
     // ────────────────────────────────────────────────────────────────────────
-
-    private WaitForGraph buildGraphFromDb(List<WaitEdgeEntity> edges) {
-        WaitForGraph graph = new WaitForGraph();
-        for (WaitEdgeEntity edgeEntity : edges) {
-            ThreadEntity waiting = edgeEntity.getWaitingThread();
-            LockEntity   lock    = edgeEntity.getLock();
-            if (waiting == null || lock == null) continue;
-            ThreadEntity owner = lock.getOwnerThread();
-            if (owner == null) continue;
-            if (waiting.getThreadId().equals(owner.getThreadId())) continue;
-
-            GraphNode src = new GraphNode(waiting.getThreadId(), NodeType.VIRTUAL_THREAD, waiting.getThreadName());
-            GraphNode tgt = new GraphNode(owner.getThreadId(),   NodeType.VIRTUAL_THREAD, owner.getThreadName());
-            graph.addEdge(new GraphEdge(src, tgt, EdgeType.WAITS_FOR));
-        }
-        return graph;
-    }
 
     private ThreadEntity saveThread(Long threadId, String name, ThreadState state, String carrier) {
         ThreadEntity t = new ThreadEntity();
