@@ -5,15 +5,14 @@ import com.virtual_deadlock_detection.LockDetectionAgent.dto.EventDTO;
 import com.virtual_deadlock_detection.LockDetectionAgent.events.EventType;
 import jdk.jfr.consumer.RecordedThread;
 import jdk.jfr.consumer.RecordingStream;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.virtual_deadlock_detection.LockDetectionAgent.logging.Logger;
 
 import java.time.LocalDateTime;
 import java.util.Objects;
 
 public class JfrEventListener {
 
-    private static final Logger log = LoggerFactory.getLogger(JfrEventListener.class);
+    private static final Logger log = Logger.getLogger(JfrEventListener.class);
     private final EventCollector collector;
 
     public JfrEventListener(EventCollector collector) {

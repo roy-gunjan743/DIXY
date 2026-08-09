@@ -9,8 +9,7 @@ import com.virtual_deadlock_detection.graph.model.GraphEdge;
 import com.virtual_deadlock_detection.graph.model.GraphNode;
 import com.virtual_deadlock_detection.graph.model.NodeType;
 import com.virtual_deadlock_detection.graph.registry.WaitForGraph;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.virtual_deadlock_detection.LockDetectionAgent.logging.Logger;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
@@ -21,7 +20,7 @@ import java.util.List;
 
 public class GraphGateway {
 
-    private static final Logger log = LoggerFactory.getLogger(GraphGateway.class);
+    private static final Logger log = Logger.getLogger(GraphGateway.class);
     private final WaitForGraph waitForGraph;
     private final DeadlockDetector detector = RuntimeContext.DETECTOR;
 

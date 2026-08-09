@@ -54,8 +54,6 @@ dependencies {
     // Minimal runtime for the standalone -javaagent jar only — deliberately
     // NOT the full runtimeClasspath, since the agent attaches to someone
     // else's bare `java -jar` and shouldn't drag in JPA/Redis/Security/etc.
-    agentRuntime 'org.slf4j:slf4j-api:2.0.16'
-    agentRuntime 'org.slf4j:slf4j-simple:2.0.16'
     agentRuntime 'jakarta.annotation:jakarta.annotation-api:2.1.1'
 }
 bootJar {

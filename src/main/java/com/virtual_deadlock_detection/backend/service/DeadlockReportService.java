@@ -5,11 +5,13 @@ import com.virtual_deadlock_detection.backend.entity.DeadlockNodeEntity;
 import com.virtual_deadlock_detection.backend.entity.DeadlockReportEntity;
 import com.virtual_deadlock_detection.backend.repository.DeadlockReportRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
+@Transactional(readOnly = true)
 public class DeadlockReportService {
 
     private final DeadlockReportRepository repository;
@@ -50,7 +52,6 @@ public class DeadlockReportService {
                 threads,
                 entity.getAppName(),
                 entity.getInstanceId(),
-                entity.getDetectionStrategy()
-        );
+                entity.getDetectionStrategy());
     }
 }

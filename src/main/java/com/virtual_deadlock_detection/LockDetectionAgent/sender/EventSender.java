@@ -4,12 +4,11 @@ import com.virtual_deadlock_detection.LockDetectionAgent.dto.EventDTO;
 import com.virtual_deadlock_detection.LockDetectionAgent.integration.GraphGateway;
 import com.virtual_deadlock_detection.LockDetectionAgent.runtime.RuntimeContext;
 import com.virtual_deadlock_detection.graph.registry.WaitForGraph;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.virtual_deadlock_detection.LockDetectionAgent.logging.Logger;
 
 public class EventSender {
 
-    private static final Logger log = LoggerFactory.getLogger(EventSender.class);
+    private static final Logger log = Logger.getLogger(EventSender.class);
     private final GraphGateway graphGateway =
             new GraphGateway(RuntimeContext.GRAPH);
 
