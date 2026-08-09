@@ -13,6 +13,7 @@ import com.virtual_deadlock_detection.graph.model.GraphNode;
 import com.virtual_deadlock_detection.graph.model.NodeType;
 import com.virtual_deadlock_detection.graph.registry.WaitForGraph;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -48,6 +49,7 @@ public class GraphService {
      * Runs deadlock detection against the current state of the database
      * (the wait_edges table), not the agent-only live registry.
      */
+    @Transactional(readOnly = true)
     public List<DeadlockCycle> detectDeadlocks() {
         return detector.detect(buildGraphFromDb());
     }
@@ -56,11 +58,21 @@ public class GraphService {
      * Rebuilds a fresh WaitForGraph from all currently stored wait-edges.
      * Shared by DeadlockCommands' "status" and "deadlocks detect" so both
      * commands always see the same graph.
+     *
+     * Uses findAllWithThreadsAndLocks() (a JOIN FETCH query) rather than
+     * plain findAll(), so waitingThread / lock / lock.ownerThread are
+     * loaded eagerly in one round trip instead of as LAZY proxies. That
+     * avoids LazyInitializationException when this runs outside of an HTTP
+     * request (e.g. from the Spring Shell CLI), where there's no
+     * Open-Session-In-View to keep a Hibernate session alive after the
+     * query returns. @Transactional here is a second safety net for any
+     * other caller.
      */
+    @Transactional(readOnly = true)
     public WaitForGraph buildGraphFromDb() {
         WaitForGraph graph = new WaitForGraph();
 
-        for (WaitEdgeEntity edgeEntity : waitEdgeRepository.findAll()) {
+        for (WaitEdgeEntity edgeEntity : waitEdgeRepository.findAllWithThreadsAndLocks()) {
             ThreadEntity waiting = edgeEntity.getWaitingThread();
             LockEntity lock = edgeEntity.getLock();
             if (waiting == null || lock == null) continue;
