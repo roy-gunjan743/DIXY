@@ -19,13 +19,12 @@ public class DatabaseSeeder implements CommandLineRunner{
     private final LockRepository lockRepository;
     private  final WaitEdgeRepository waitEdgeRepository;
 
-    @Value("${app.seed-data.enabled}")
+    @Value("${app.seed-data.enabled:false}")
     private boolean seedDatabase;
 
     public DatabaseSeeder(ThreadRepository threadRepository,
                           LockRepository lockRepository,
-                          WaitEdgeRepository waitEdgeRepository,
-                          boolean seedDataEnabled){
+                          WaitEdgeRepository waitEdgeRepository){
         this.threadRepository=threadRepository;
         this.lockRepository=lockRepository;
         this.waitEdgeRepository=waitEdgeRepository;
@@ -35,7 +34,7 @@ public class DatabaseSeeder implements CommandLineRunner{
     public void run(String... args){
         if (!seedDatabase)
         {
-          return;
+            return;
         }
         if (!isDatabaseEmpty())
         {

@@ -198,7 +198,9 @@ public class StatusController {
                             thread.getThreadName(),
                             thread.getCarrierThread(),
                             lockType,
-                            "com.virtual_deadlock_detection.backend.Service.processData(Service.java:45)"
+                            null // no real source-location capture wired up yet — was
+                            // previously a hardcoded fake stack frame; better to
+                            // report "unknown" than to fabricate one.
                     );
                     pinningDetails.add(pinDto);
                 }
@@ -234,13 +236,15 @@ public class StatusController {
                 .distinct()
                 .count();
 
-        // Fallbacks for empty database to show a beautiful demo if needed
-        if (dbThreads.isEmpty()) {
-            virtualThreadsCount = 2450122;
-            distinctCarriers = 16;
-        }
-
-        String carrierPoolSize = distinctCarriers + " / 16";
+        // Real default carrier pool size for virtual threads is the common
+        // ForkJoinPool's target parallelism (== available processors unless
+        // overridden by -Djdk.virtualThreadScheduler.parallelism). This
+        // replaces the previous hardcoded "/ 16" and the empty-DB fallback
+        // that reported fake numbers (2,450,122 virtual threads, 16
+        // carriers) — those were purely cosmetic and not derived from
+        // anything real. An empty database now honestly reports 0.
+        int carrierPoolTarget = java.util.concurrent.ForkJoinPool.getCommonPoolParallelism();
+        String carrierPoolSize = distinctCarriers + " / " + carrierPoolTarget;
 
         double heapUsagePercent = 0.0;
         Runtime runtime = Runtime.getRuntime();
@@ -255,8 +259,8 @@ public class StatusController {
         TelemetryMetricsDTO metrics = new TelemetryMetricsDTO(
                 virtualThreadsCount,
                 carrierPoolSize,
-                dbLocks.isEmpty() ? 10452 : dbLocks.size(),
-                dbEdges.isEmpty() ? 24902 : dbEdges.size(),
+                dbLocks.size(),
+                dbEdges.size(),
                 scanTimeMs,
                 heapUsagePercent
         );
