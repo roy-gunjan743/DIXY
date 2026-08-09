@@ -37,9 +37,17 @@ import java.util.List;
  *   vdd:> status
  *   vdd:> deadlocks list
  *   vdd:> deadlocks detect
- *   vdd:> deadlocks seed
  *   vdd:> deadlocks clear
  * </pre>
+ *
+ * <p>All data shown here is real, live-captured data — there is no seed/demo
+ * command. Threads, locks, and wait-edges are populated in the database by
+ * an actual {@code -javaagent} attached to a real target JVM (via
+ * {@code POST /api/telemetry} and {@code POST /api/internal/deadlocks});
+ * "status" and "deadlocks detect" then run the real {@link
+ * com.virtual_deadlock_detection.graph.detector.DeadlockDetector} against
+ * that data, and "deadlocks list" shows real reports the agent already
+ * detected and posted back.</p>
  *
  * <p>Built on the Spring Shell 4.0 command model ({@code @Command} from
  * {@code org.springframework.shell.core.command.annotation}, replacing the
@@ -58,7 +66,7 @@ import java.util.List;
 // whole "deadlocks"/"status" group silently vanishes from `help` with no
 // error. (Compare EventCommands, which has no @Transactional and whose
 // commands do show up.) @Transactional is applied per-method below, only on
-// the two methods that actually need atomic multi-row writes.
+// the method that actually needs an atomic multi-row write (deadlocksClear).
 @Component
 public class DeadlockCommands {
 
@@ -289,51 +297,6 @@ public class DeadlockCommands {
     }
 
     // ────────────────────────────────────────────────────────────────────────
-    // deadlocks seed
-    // ────────────────────────────────────────────────────────────────────────
-
-    /**
-     * Seeds the database with a demo 2-way deadlock scenario.
-     *
-     * <pre>vdd:> deadlocks seed</pre>
-     */
-    @Command(name = { "deadlocks", "seed" }, description = "Seed the database with a demo 2-way deadlock scenario", group = GROUP)
-    @Transactional
-    public void deadlocksSeed(CommandContext ctx) {
-        PrintWriter out = ctx.outputWriter();
-        try {
-            waitEdgeRepository.deleteAll();
-            lockRepository.deleteAll();
-            threadRepository.deleteAll();
-
-            ThreadEntity t1 = saveThread(10023L, "VirtualThread-10023", ThreadState.BLOCKED, "ForkJoinPool-1-worker-1");
-            ThreadEntity t2 = saveThread(10024L, "VirtualThread-10024", ThreadState.BLOCKED, "ForkJoinPool-1-worker-2");
-
-            ThreadEntity p1 = saveThread(2041L, "VirtualThread-2041", ThreadState.BLOCKED, "ForkJoinPool-1-worker-3");
-            ThreadEntity p2 = saveThread(2089L, "VirtualThread-2089", ThreadState.BLOCKED, "ForkJoinPool-1-worker-7");
-
-            LockEntity lock1 = saveLock("Monitor-2351897819504", "synchronized block", t2);
-            LockEntity lock2 = saveLock("Monitor-2351897819505", "synchronized block", t1);
-
-            ThreadEntity c1 = saveThread(99991L, "CarrierOwner-1", ThreadState.RUNNABLE, null);
-            ThreadEntity c2 = saveThread(99992L, "CarrierOwner-2", ThreadState.RUNNABLE, null);
-            LockEntity pl1 = saveLock("java.lang.Object@12abc3", "synchronized block", c1);
-            LockEntity pl2 = saveLock("java.lang.Object@5f99ee", "synchronized block", c2);
-
-            saveEdge(t1, lock1);
-            saveEdge(t2, lock2);
-            saveEdge(p1, pl1);
-            saveEdge(p2, pl2);
-
-            out.println(YELLOW + BOLD + "\n  ✔  2-way deadlock seeded. Run 'status' or 'deadlocks detect' to see it.\n" + RESET);
-            out.flush();
-        } catch (DataAccessException e) {
-            log.error("deadlocks seed command failed: database access error", e);
-            printError(out, "Failed to seed demo data — database is unreachable or write failed.");
-        }
-    }
-
-    // ────────────────────────────────────────────────────────────────────────
     // deadlocks clear
     // ────────────────────────────────────────────────────────────────────────
 
@@ -361,30 +324,6 @@ public class DeadlockCommands {
     // ────────────────────────────────────────────────────────────────────────
     // Helpers
     // ────────────────────────────────────────────────────────────────────────
-
-    private ThreadEntity saveThread(Long threadId, String name, ThreadState state, String carrier) {
-        ThreadEntity t = new ThreadEntity();
-        t.setThreadId(threadId);
-        t.setThreadName(name);
-        t.setState(state);
-        t.setCarrierThread(carrier);
-        return threadRepository.save(t);
-    }
-
-    private LockEntity saveLock(String lockId, String lockType, ThreadEntity owner) {
-        LockEntity l = new LockEntity();
-        l.setLockId(lockId);
-        l.setLockType(lockType);
-        l.setOwnerThread(owner);
-        return lockRepository.save(l);
-    }
-
-    private void saveEdge(ThreadEntity waiting, LockEntity lock) {
-        WaitEdgeEntity e = new WaitEdgeEntity();
-        e.setWaitingThread(waiting);
-        e.setLock(lock);
-        waitEdgeRepository.save(e);
-    }
 
     private void printError(PrintWriter out, String message) {
         out.println(RED + BOLD + "  ✘  " + message + RESET);
