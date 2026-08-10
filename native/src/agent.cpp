@@ -81,9 +81,11 @@ static jlong getOrAssignTag(jvmtiEnv* env, jobject obj, std::atomic<jlong>& coun
 
 // Fetches a thread's real name via GetThreadInfo, releasing all
 // JVMTI-allocated resources it returns.
-static bool getThreadName(jvmtiEnv* env, jthread thread, std::string& outName) {
+// Fetches a thread's real name via GetThreadInfo, releasing all
+// JVMTI-allocated resources and JNI local references it returns.
+static bool getThreadName(jvmtiEnv* jvmti_env, JNIEnv* jni_env, jthread thread, std::string& outName) {
     jvmtiThreadInfo info{};
-    jvmtiError err = env->GetThreadInfo(thread, &info);
+    jvmtiError err = jvmti_env->GetThreadInfo(thread, &info);
     if (err != JVMTI_ERROR_NONE) {
         outName = "<unknown>";
         return false;
@@ -91,11 +93,18 @@ static bool getThreadName(jvmtiEnv* env, jthread thread, std::string& outName) {
 
     outName = (info.name != nullptr) ? info.name : "<unnamed>";
 
+    // Clean up JVMTI allocated string
     if (info.name != nullptr) {
-        env->Deallocate((unsigned char*)info.name);
+        jvmti_env->Deallocate((unsigned char*)info.name);
     }
-    // info.thread_group / info.context_class_loader are local jobject refs
-    // owned by the calling JNIEnv; we don't use them here.
+
+    // CRITICAL FIX: Clean up JNI local references to prevent JNI table overflow
+    if (info.thread_group != nullptr) {
+        jni_env->DeleteLocalRef(info.thread_group);
+    }
+    if (info.context_class_loader != nullptr) {
+        jni_env->DeleteLocalRef(info.context_class_loader);
+    }
 
     return true;
 }
@@ -159,8 +168,8 @@ static void JNICALL MonitorContendedEnter(
     // 3. Get real thread names.
     std::string waitingThreadName;
     std::string ownerThreadName;
-    getThreadName(jvmti_env, thread, waitingThreadName);
-    getThreadName(jvmti_env, owner, ownerThreadName);
+    getThreadName(jvmti_env, jni_env, thread, waitingThreadName);
+    getThreadName(jvmti_env, jni_env, owner, ownerThreadName);
 
     jlong timestamp = currentTimestampMillis();
 
