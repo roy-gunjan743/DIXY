@@ -7,9 +7,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.EmptyResultDataAccessException;
-import org.springframework.shell.command.CommandContext;
-import org.springframework.shell.command.annotation.Command;
-import org.springframework.shell.command.annotation.Option;
+import org.springframework.shell.core.command.CommandContext;
+import org.springframework.shell.core.command.annotation.Command;
+import org.springframework.shell.core.command.annotation.Option;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,13 +26,12 @@ import java.util.Optional;
  *   vdd:> threads delete --id 5
  * </pre>
  *
- * <p>Built on the Spring Shell 3.4 command model ({@code @Command} / {@code @Option}
- * from {@code org.springframework.shell.command.annotation}). Output goes through
- * {@code ctx.getTerminal().writer()} rather than raw {@code System.out} — the
- * 3.x {@link CommandContext} has no {@code outputWriter()} shortcut (that was
- * added in Spring Shell 4's core module) — and database errors are caught and
- * reported as a clean one-line message instead of a raw stack trace surfacing
- * in the shell.</p>
+ * <p>Built on the Spring Shell 4.0 command model ({@code @Command} / {@code @Option}
+ * from {@code org.springframework.shell.core.command.annotation}). Output goes
+ * through {@code ctx.outputWriter()} rather than raw {@code System.out} — the
+ * 4.x {@link CommandContext} exposes the writer directly — and database errors
+ * are caught and reported as a clean one-line message instead of a raw stack
+ * trace surfacing in the shell.</p>
  */
 @Component
 @Transactional
@@ -65,9 +64,9 @@ public class ThreadCommands {
      *
      * <pre>vdd:> threads list</pre>
      */
-    @Command(command = { "threads", "list" }, description = "List all registered threads in the database", group = GROUP)
+    @Command(name = { "threads", "list" }, description = "List all registered threads in the database", group = GROUP)
     public void threadsList(CommandContext ctx) {
-        PrintWriter out = ctx.getTerminal().writer();
+        PrintWriter out = ctx.outputWriter();
         try {
             List<ThreadEntity> threads = threadService.getAllThreads();
 
@@ -86,11 +85,12 @@ public class ThreadCommands {
 
             for (ThreadEntity t : threads) {
                 String stateStr = t.getState() != null ? t.getState().name() : "-";
-                sb.append(String.format("  %-6d  %-12d  %-35s  %-12s  %s\n",
+                String statePadded = String.format("%-12s", stateStr);
+                sb.append(String.format("  %-6d  %-12d  %-35s  %s  %s\n",
                         t.getId(),
                         t.getThreadId(),
                         truncate(t.getThreadName(), 35),
-                        colorState(stateStr),
+                        colorState(statePadded),
                         t.getCarrierThread() != null ? t.getCarrierThread() : "-"));
             }
 
@@ -112,12 +112,12 @@ public class ThreadCommands {
      *
      * <pre>vdd:> threads get --thread-id 10023</pre>
      */
-    @Command(command = { "threads", "get" }, description = "Get a thread by JVM thread-id", group = GROUP)
+    @Command(name = { "threads", "get" }, description = "Get a thread by JVM thread-id", group = GROUP)
     public void threadsGet(
             CommandContext ctx,
-            @Option(shortNames = 't', longNames = "thread-id", description = "JVM thread ID (e.g. 10023)") Long threadId) {
+            @Option(shortName = 't', longName = "thread-id", description = "JVM thread ID (e.g. 10023)") Long threadId) {
 
-        PrintWriter out = ctx.getTerminal().writer();
+        PrintWriter out = ctx.outputWriter();
 
         if (threadId == null) {
             printError(out, "Missing required option: --thread-id (-t)");
@@ -163,12 +163,12 @@ public class ThreadCommands {
      *
      * <pre>vdd:> threads delete --id 5</pre>
      */
-    @Command(command = { "threads", "delete" }, description = "Delete a thread by its database ID", group = GROUP)
+    @Command(name = { "threads", "delete" }, description = "Delete a thread by its database ID", group = GROUP)
     public void threadsDelete(
             CommandContext ctx,
-            @Option(shortNames = 'i', longNames = "id", description = "Database primary key of the thread") Long id) {
+            @Option(shortName = 'i', longName = "id", description = "Database primary key of the thread") Long id) {
 
-        PrintWriter out = ctx.getTerminal().writer();
+        PrintWriter out = ctx.outputWriter();
 
         if (id == null) {
             printError(out, "Missing required option: --id (-i)");
@@ -195,7 +195,7 @@ public class ThreadCommands {
     }
 
     private String colorState(String state) {
-        return switch (state) {
+        return switch (state.trim()) {
             case "BLOCKED" -> RED + BOLD + state + RESET;
             case "WAITING", "TIMED_WAITING" -> YELLOW + BOLD + state + RESET;
             case "RUNNABLE" -> GREEN + state + RESET;

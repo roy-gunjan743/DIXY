@@ -48,7 +48,8 @@ dependencies {
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
     implementation "org.springframework.boot:spring-boot-starter-security"
-    implementation 'org.springframework.shell:spring-shell-starter:3.4.0'
+    implementation 'org.springframework.shell:spring-shell-starter:4.0.3'
+    implementation 'org.springframework.shell:spring-shell-jline:4.0.3'
 
     // Minimal runtime for the standalone -javaagent jar only — deliberately
     // NOT the full runtimeClasspath, since the agent attaches to someone

@@ -15,17 +15,14 @@ import com.virtual_deadlock_detection.backend.entity.WaitEdgeEntity;
 import com.virtual_deadlock_detection.backend.enums.ThreadState;
 import com.virtual_deadlock_detection.graph.model.DeadlockCycle;
 import com.virtual_deadlock_detection.graph.model.GraphEdge;
-import com.virtual_deadlock_detection.graph.model.GraphNode;
-import com.virtual_deadlock_detection.graph.model.NodeType;
-import com.virtual_deadlock_detection.graph.model.EdgeType;
 import com.virtual_deadlock_detection.graph.registry.WaitForGraph;
 import com.virtual_deadlock_detection.LockDetectionAgent.runtime.RuntimeContext;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
-import org.springframework.shell.command.CommandContext;
-import org.springframework.shell.command.annotation.Command;
+import org.springframework.shell.core.command.CommandContext;
+import org.springframework.shell.core.command.annotation.Command;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,22 +37,37 @@ import java.util.List;
  *   vdd:> status
  *   vdd:> deadlocks list
  *   vdd:> deadlocks detect
- *   vdd:> deadlocks seed
  *   vdd:> deadlocks clear
  * </pre>
  *
- * <p>Built on the Spring Shell 3.4 command model ({@code @Command} from
- * {@code org.springframework.shell.command.annotation}, replacing the removed
- * {@code @ShellComponent}/{@code @ShellMethod}/{@code @ShellOption} annotations
- * from v2). Output goes through {@code ctx.getTerminal().writer()} rather than
- * raw {@code System.out} — the 3.x {@link CommandContext} has no
- * {@code outputWriter()} shortcut (that was added in Spring Shell 4's core
- * module) — which stays correctly wired to the active terminal/writer in both
- * interactive and non-interactive shell modes, and is what Spring Shell's own
- * test harness expects.</p>
+ * <p>All data shown here is real, live-captured data — there is no seed/demo
+ * command. Threads, locks, and wait-edges are populated in the database by
+ * an actual {@code -javaagent} attached to a real target JVM (via
+ * {@code POST /api/telemetry} and {@code POST /api/internal/deadlocks});
+ * "status" and "deadlocks detect" then run the real {@link
+ * com.virtual_deadlock_detection.graph.detector.DeadlockDetector} against
+ * that data, and "deadlocks list" shows real reports the agent already
+ * detected and posted back.</p>
+ *
+ * <p>Built on the Spring Shell 4.0 command model ({@code @Command} from
+ * {@code org.springframework.shell.core.command.annotation}, replacing the
+ * removed {@code @ShellComponent}/{@code @ShellMethod}/{@code @ShellOption}
+ * annotations from v2/v3). Output goes through {@code ctx.outputWriter()}
+ * rather than raw {@code System.out} — the 4.x {@link CommandContext} exposes
+ * the writer directly, which stays correctly wired to the active
+ * terminal/writer in both interactive and non-interactive shell modes, and is
+ * what Spring Shell's own test harness expects.</p>
  */
+// NOTE: no class-level @Transactional here. A class-level @Transactional
+// forces Spring to wrap this bean in a CGLIB proxy, and Spring Shell 4's
+// command scanner registers commands off the raw bean it receives from the
+// context. If that bean is a proxy rather than the plain DeadlockCommands
+// instance, its @Command-annotated methods aren't reliably discovered — the
+// whole "deadlocks"/"status" group silently vanishes from `help` with no
+// error. (Compare EventCommands, which has no @Transactional and whose
+// commands do show up.) @Transactional is applied per-method below, only on
+// the method that actually needs an atomic multi-row write (deadlocksClear).
 @Component
-@Transactional
 public class DeadlockCommands {
 
     private static final Logger log = LoggerFactory.getLogger(DeadlockCommands.class);
@@ -106,9 +118,9 @@ public class DeadlockCommands {
      *
      * <pre>vdd:> status</pre>
      */
-    @Command(command = "status", description = "Show full diagnostic status (HEALTHY / WARNING / CRITICAL)", group = GROUP)
+    @Command(name = "status", description = "Show full diagnostic status (HEALTHY / WARNING / CRITICAL)", group = GROUP)
     public void status(CommandContext ctx) {
-        PrintWriter out = ctx.getTerminal().writer();
+        PrintWriter out = ctx.outputWriter();
         try {
             long startNs = System.nanoTime();
 
@@ -116,7 +128,9 @@ public class DeadlockCommands {
             List<LockEntity>     locks   = lockService.getAllLocks();
             List<WaitEdgeEntity> edges   = waitEdgeService.getAllEdges();
 
-            WaitForGraph graph = buildGraphFromDb(edges);
+            // Shared with "deadlocks detect" via GraphService.buildGraphFromDb()
+            // so both commands always agree on what's currently stored.
+            WaitForGraph graph = graphService.buildGraphFromDb();
             List<DeadlockCycle> cycles = RuntimeContext.DETECTOR.detect(graph);
 
             long pinnedCount = threads.stream()
@@ -192,9 +206,9 @@ public class DeadlockCommands {
      *
      * <pre>vdd:> deadlocks list</pre>
      */
-    @Command(command = { "deadlocks", "list" }, description = "List all stored deadlock reports", group = GROUP)
+    @Command(name = { "deadlocks", "list" }, description = "List all stored deadlock reports", group = GROUP)
     public void deadlocksList(CommandContext ctx) {
-        PrintWriter out = ctx.getTerminal().writer();
+        PrintWriter out = ctx.outputWriter();
         try {
             List<DeadlockReportDTO> reports = deadlockReportService.getAllReports();
 
@@ -213,14 +227,16 @@ public class DeadlockCommands {
 
             for (DeadlockReportDTO r : reports) {
                 String sev = r.getSeverity();
-                String sevColored = "CRITICAL".equalsIgnoreCase(sev) ? RED + BOLD + sev + RESET
-                        : "WARNING".equalsIgnoreCase(sev)  ? YELLOW + BOLD + sev + RESET
-                        : GREEN + sev + RESET;
-                String resolved = r.isResolved() ? GREEN + "YES" + RESET : YELLOW + "NO" + RESET;
+                String sevPadded = String.format("%-10s", sev);
+                String sevColored = "CRITICAL".equalsIgnoreCase(sev) ? RED + BOLD + sevPadded + RESET
+                        : "WARNING".equalsIgnoreCase(sev)  ? YELLOW + BOLD + sevPadded + RESET
+                        : GREEN + sevPadded + RESET;
+                String resolvedPadded = String.format("%-8s", r.isResolved() ? "YES" : "NO");
+                String resolved = r.isResolved() ? GREEN + resolvedPadded + RESET : YELLOW + resolvedPadded + RESET;
                 String threads   = r.getThreads() == null ? "-" : String.join(", ", r.getThreads());
 
-                sb.append(String.format("  %-6d  %s%-10s%s  %-8s  %-16s  %s\n",
-                        r.getId(), "", sevColored, "", resolved,
+                sb.append(String.format("  %-6d  %s  %s  %-16s  %s\n",
+                        r.getId(), sevColored, resolved,
                         r.getDetectedAt() != null ? r.getDetectedAt().toString() : "-",
                         threads));
             }
@@ -243,9 +259,9 @@ public class DeadlockCommands {
      *
      * <pre>vdd:> deadlocks detect</pre>
      */
-    @Command(command = { "deadlocks", "detect" }, description = "Run live deadlock detection on the current WaitForGraph", group = GROUP)
+    @Command(name = { "deadlocks", "detect" }, description = "Run live deadlock detection on the current WaitForGraph", group = GROUP)
     public void deadlocksDetect(CommandContext ctx) {
-        PrintWriter out = ctx.getTerminal().writer();
+        PrintWriter out = ctx.outputWriter();
         try {
             List<DeadlockCycle> cycles = graphService.detectDeadlocks();
 
@@ -281,50 +297,6 @@ public class DeadlockCommands {
     }
 
     // ────────────────────────────────────────────────────────────────────────
-    // deadlocks seed
-    // ────────────────────────────────────────────────────────────────────────
-
-    /**
-     * Seeds the database with a demo 2-way deadlock scenario.
-     *
-     * <pre>vdd:> deadlocks seed</pre>
-     */
-    @Command(command = { "deadlocks", "seed" }, description = "Seed the database with a demo 2-way deadlock scenario", group = GROUP)
-    public void deadlocksSeed(CommandContext ctx) {
-        PrintWriter out = ctx.getTerminal().writer();
-        try {
-            waitEdgeRepository.deleteAll();
-            lockRepository.deleteAll();
-            threadRepository.deleteAll();
-
-            ThreadEntity t1 = saveThread(10023L, "VirtualThread-10023", ThreadState.BLOCKED, "ForkJoinPool-1-worker-1");
-            ThreadEntity t2 = saveThread(10024L, "VirtualThread-10024", ThreadState.BLOCKED, "ForkJoinPool-1-worker-2");
-
-            ThreadEntity p1 = saveThread(2041L, "VirtualThread-2041", ThreadState.BLOCKED, "ForkJoinPool-1-worker-3");
-            ThreadEntity p2 = saveThread(2089L, "VirtualThread-2089", ThreadState.BLOCKED, "ForkJoinPool-1-worker-7");
-
-            LockEntity lock1 = saveLock("Monitor-2351897819504", "synchronized block", t2);
-            LockEntity lock2 = saveLock("Monitor-2351897819505", "synchronized block", t1);
-
-            ThreadEntity c1 = saveThread(99991L, "CarrierOwner-1", ThreadState.RUNNABLE, null);
-            ThreadEntity c2 = saveThread(99992L, "CarrierOwner-2", ThreadState.RUNNABLE, null);
-            LockEntity pl1 = saveLock("java.lang.Object@12abc3", "synchronized block", c1);
-            LockEntity pl2 = saveLock("java.lang.Object@5f99ee", "synchronized block", c2);
-
-            saveEdge(t1, lock1);
-            saveEdge(t2, lock2);
-            saveEdge(p1, pl1);
-            saveEdge(p2, pl2);
-
-            out.println(YELLOW + BOLD + "\n  ✔  2-way deadlock seeded. Run 'status' or 'deadlocks detect' to see it.\n" + RESET);
-            out.flush();
-        } catch (DataAccessException e) {
-            log.error("deadlocks seed command failed: database access error", e);
-            printError(out, "Failed to seed demo data — database is unreachable or write failed.");
-        }
-    }
-
-    // ────────────────────────────────────────────────────────────────────────
     // deadlocks clear
     // ────────────────────────────────────────────────────────────────────────
 
@@ -333,9 +305,10 @@ public class DeadlockCommands {
      *
      * <pre>vdd:> deadlocks clear</pre>
      */
-    @Command(command = { "deadlocks", "clear" }, description = "Clear all threads, locks, and wait-edges from the database", group = GROUP)
+    @Command(name = { "deadlocks", "clear" }, description = "Clear all threads, locks, and wait-edges from the database", group = GROUP)
+    @Transactional
     public void deadlocksClear(CommandContext ctx) {
-        PrintWriter out = ctx.getTerminal().writer();
+        PrintWriter out = ctx.outputWriter();
         try {
             waitEdgeRepository.deleteAll();
             lockRepository.deleteAll();
@@ -351,47 +324,6 @@ public class DeadlockCommands {
     // ────────────────────────────────────────────────────────────────────────
     // Helpers
     // ────────────────────────────────────────────────────────────────────────
-
-    private WaitForGraph buildGraphFromDb(List<WaitEdgeEntity> edges) {
-        WaitForGraph graph = new WaitForGraph();
-        for (WaitEdgeEntity edgeEntity : edges) {
-            ThreadEntity waiting = edgeEntity.getWaitingThread();
-            LockEntity   lock    = edgeEntity.getLock();
-            if (waiting == null || lock == null) continue;
-            ThreadEntity owner = lock.getOwnerThread();
-            if (owner == null) continue;
-            if (waiting.getThreadId().equals(owner.getThreadId())) continue;
-
-            GraphNode src = new GraphNode(waiting.getThreadId(), NodeType.VIRTUAL_THREAD, waiting.getThreadName());
-            GraphNode tgt = new GraphNode(owner.getThreadId(),   NodeType.VIRTUAL_THREAD, owner.getThreadName());
-            graph.addEdge(new GraphEdge(src, tgt, EdgeType.WAITS_FOR));
-        }
-        return graph;
-    }
-
-    private ThreadEntity saveThread(Long threadId, String name, ThreadState state, String carrier) {
-        ThreadEntity t = new ThreadEntity();
-        t.setThreadId(threadId);
-        t.setThreadName(name);
-        t.setState(state);
-        t.setCarrierThread(carrier);
-        return threadRepository.save(t);
-    }
-
-    private LockEntity saveLock(String lockId, String lockType, ThreadEntity owner) {
-        LockEntity l = new LockEntity();
-        l.setLockId(lockId);
-        l.setLockType(lockType);
-        l.setOwnerThread(owner);
-        return lockRepository.save(l);
-    }
-
-    private void saveEdge(ThreadEntity waiting, LockEntity lock) {
-        WaitEdgeEntity e = new WaitEdgeEntity();
-        e.setWaitingThread(waiting);
-        e.setLock(lock);
-        waitEdgeRepository.save(e);
-    }
 
     private void printError(PrintWriter out, String message) {
         out.println(RED + BOLD + "  ✘  " + message + RESET);

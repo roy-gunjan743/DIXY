@@ -5,13 +5,12 @@ import com.virtual_deadlock_detection.backend.entity.LockEntity;
 import com.virtual_deadlock_detection.backend.entity.ThreadEntity;
 import com.virtual_deadlock_detection.backend.entity.WaitEdgeEntity;
 import com.virtual_deadlock_detection.backend.enums.ThreadState;
+import com.virtual_deadlock_detection.backend.service.GraphService;
 import com.virtual_deadlock_detection.backend.service.LockService;
 import com.virtual_deadlock_detection.backend.service.ThreadService;
 import com.virtual_deadlock_detection.backend.service.WaitEdgeService;
-import com.virtual_deadlock_detection.graph.detector.DeadlockDetector;
 import com.virtual_deadlock_detection.graph.model.DeadlockCycle;
 import com.virtual_deadlock_detection.graph.model.GraphEdge;
-import com.virtual_deadlock_detection.graph.model.GraphNode;
 import com.virtual_deadlock_detection.graph.registry.WaitForGraph;
 
 import org.springframework.web.bind.annotation.CrossOrigin;
@@ -38,6 +37,7 @@ public class StatusController {
     private final ThreadService threadService;
     private final LockService lockService;
     private final WaitEdgeService waitEdgeService;
+    private final GraphService graphService;
     private final ThreadRepository threadRepository;
     private final LockRepository lockRepository;
     private final WaitEdgeRepository waitEdgeRepository;
@@ -45,12 +45,14 @@ public class StatusController {
     public StatusController(ThreadService threadService,
                             LockService lockService,
                             WaitEdgeService waitEdgeService,
+                            GraphService graphService,
                             ThreadRepository threadRepository,
                             LockRepository lockRepository,
                             WaitEdgeRepository waitEdgeRepository) {
         this.threadService = threadService;
         this.lockService = lockService;
         this.waitEdgeService = waitEdgeService;
+        this.graphService = graphService;
         this.threadRepository = threadRepository;
         this.lockRepository = lockRepository;
         this.waitEdgeRepository = waitEdgeRepository;
@@ -132,37 +134,11 @@ public class StatusController {
         List<LockEntity> dbLocks = lockService.getAllLocks();
         List<WaitEdgeEntity> dbEdges = waitEdgeService.getAllEdges();
 
-        // 1. Build WaitForGraph from wait edges
-        WaitForGraph graph = new WaitForGraph();
-        for (WaitEdgeEntity edgeEntity : dbEdges) {
-            ThreadEntity waiting = edgeEntity.getWaitingThread();
-            LockEntity lock = edgeEntity.getLock();
-            if (waiting == null || lock == null) continue;
-
-            ThreadEntity owner = lock.getOwnerThread();
-            if (owner == null) continue;
-
-            // Skip self-loops
-            if (waiting.getThreadId().equals(owner.getThreadId())) continue;
-
-            GraphNode source = new GraphNode(
-                    waiting.getThreadId(),
-                    com.virtual_deadlock_detection.graph.model.NodeType.VIRTUAL_THREAD,
-                    waiting.getThreadName()
-            );
-            GraphNode target = new GraphNode(
-                    owner.getThreadId(),
-                    com.virtual_deadlock_detection.graph.model.NodeType.VIRTUAL_THREAD,
-                    owner.getThreadName()
-            );
-
-            GraphEdge edge = new GraphEdge(
-                    source,
-                    target,
-                    com.virtual_deadlock_detection.graph.model.EdgeType.WAITS_FOR
-            );
-            graph.addEdge(edge);
-        }
+        // 1. Build WaitForGraph from wait edges — delegates to GraphService
+        // so the web dashboard and the CLI's "status"/"deadlocks detect"
+        // always agree on how the graph is built, instead of keeping a
+        // second, drifted copy of this logic here.
+        WaitForGraph graph = graphService.buildGraphFromDb();
 
         // 2. Detect Deadlocks
         List<DeadlockCycle> cycles = RuntimeContext.DETECTOR.detect(graph);
@@ -182,7 +158,7 @@ public class StatusController {
                     if (edgeEntity.getWaitingThread().getThreadId() == fromId &&
                             edgeEntity.getLock().getOwnerThread() != null &&
                             edgeEntity.getLock().getOwnerThread().getThreadId() == toId) {
-                        
+
                         waitingOnLockStr = edgeEntity.getLock().getLockId() + " (" + edgeEntity.getLock().getLockType() + ")";
                         if ("synchronized".equalsIgnoreCase(edgeEntity.getLock().getLockType()) ||
                                 edgeEntity.getLock().getLockType().toLowerCase().contains("synchronized")) {
@@ -206,9 +182,9 @@ public class StatusController {
         List<PinningDetailDTO> pinningDetails = new ArrayList<>();
         for (ThreadEntity thread : dbThreads) {
             if (thread.getCarrierThread() != null && !thread.getCarrierThread().isEmpty()) {
-                boolean isBlockedOrWaiting = thread.getState() == ThreadState.BLOCKED || 
-                                             thread.getState() == ThreadState.WAITING || 
-                                             thread.getState() == ThreadState.TIMED_WAITING;
+                boolean isBlockedOrWaiting = thread.getState() == ThreadState.BLOCKED ||
+                        thread.getState() == ThreadState.WAITING ||
+                        thread.getState() == ThreadState.TIMED_WAITING;
                 if (isBlockedOrWaiting) {
                     String lockType = "synchronized block";
                     for (WaitEdgeEntity edgeEntity : dbEdges) {
@@ -222,7 +198,9 @@ public class StatusController {
                             thread.getThreadName(),
                             thread.getCarrierThread(),
                             lockType,
-                            "com.virtual_deadlock_detection.backend.Service.processData(Service.java:45)"
+                            null // no real source-location capture wired up yet — was
+                            // previously a hardcoded fake stack frame; better to
+                            // report "unknown" than to fabricate one.
                     );
                     pinningDetails.add(pinDto);
                 }
@@ -258,13 +236,15 @@ public class StatusController {
                 .distinct()
                 .count();
 
-        // Fallbacks for empty database to show a beautiful demo if needed
-        if (dbThreads.isEmpty()) {
-            virtualThreadsCount = 2450122;
-            distinctCarriers = 16;
-        }
-
-        String carrierPoolSize = distinctCarriers + " / 16";
+        // Real default carrier pool size for virtual threads is the common
+        // ForkJoinPool's target parallelism (== available processors unless
+        // overridden by -Djdk.virtualThreadScheduler.parallelism). This
+        // replaces the previous hardcoded "/ 16" and the empty-DB fallback
+        // that reported fake numbers (2,450,122 virtual threads, 16
+        // carriers) — those were purely cosmetic and not derived from
+        // anything real. An empty database now honestly reports 0.
+        int carrierPoolTarget = java.util.concurrent.ForkJoinPool.getCommonPoolParallelism();
+        String carrierPoolSize = distinctCarriers + " / " + carrierPoolTarget;
 
         double heapUsagePercent = 0.0;
         Runtime runtime = Runtime.getRuntime();
@@ -279,8 +259,8 @@ public class StatusController {
         TelemetryMetricsDTO metrics = new TelemetryMetricsDTO(
                 virtualThreadsCount,
                 carrierPoolSize,
-                dbLocks.isEmpty() ? 10452 : dbLocks.size(),
-                dbEdges.isEmpty() ? 24902 : dbEdges.size(),
+                dbLocks.size(),
+                dbEdges.size(),
                 scanTimeMs,
                 heapUsagePercent
         );

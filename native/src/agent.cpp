@@ -10,6 +10,20 @@
 
 /*
  * ============================================================
+ * PRODUCTION LOGGING CONTROL
+ * ============================================================
+ */
+// Comment out the next line to build for production (disables all JVMTI stdout)
+#define VDD_DEBUG_MODE 1
+
+#ifdef VDD_DEBUG_MODE
+    #define AGENT_LOG(msg) std::cout << "[JVMTI] " << msg << std::endl
+#else
+    #define AGENT_LOG(msg) // Compiles to nothing in production
+#endif
+
+/*
+ * ============================================================
  * CONFIG — matches the real NativeEventBridge.java
  * ============================================================
  */
@@ -35,7 +49,7 @@ static const char* TARGET_METHOD_RELEASED_SIG = "(JJJ)V";
 static JavaVM*    g_jvm = nullptr;
 static jvmtiEnv*  jvmti = nullptr;
 
-static jclass     g_bridgeClass        = nullptr; // global ref
+static jclass     g_bridgeClass           = nullptr; // global ref
 static jmethodID  g_publishLockOwnedId    = nullptr;
 static jmethodID  g_publishLockReleasedId = nullptr;
 
@@ -63,7 +77,7 @@ static jlong getOrAssignTag(jvmtiEnv* env, jobject obj, std::atomic<jlong>& coun
     jlong tag = 0;
     jvmtiError err = env->GetTag(obj, &tag);
     if (err != JVMTI_ERROR_NONE) {
-        std::cout << "[JVMTI] GetTag failed, err=" << err << std::endl;
+        AGENT_LOG("GetTag failed, err=" << err);
         return -1;
     }
 
@@ -71,7 +85,7 @@ static jlong getOrAssignTag(jvmtiEnv* env, jobject obj, std::atomic<jlong>& coun
         tag = counter.fetch_add(1);
         err = env->SetTag(obj, tag);
         if (err != JVMTI_ERROR_NONE) {
-            std::cout << "[JVMTI] SetTag failed, err=" << err << std::endl;
+            AGENT_LOG("SetTag failed, err=" << err);
             return -1;
         }
     }
@@ -80,10 +94,10 @@ static jlong getOrAssignTag(jvmtiEnv* env, jobject obj, std::atomic<jlong>& coun
 }
 
 // Fetches a thread's real name via GetThreadInfo, releasing all
-// JVMTI-allocated resources it returns.
-static bool getThreadName(jvmtiEnv* env, jthread thread, std::string& outName) {
+// JVMTI-allocated resources and JNI local references it returns.
+static bool getThreadName(jvmtiEnv* jvmti_env, JNIEnv* jni_env, jthread thread, std::string& outName) {
     jvmtiThreadInfo info{};
-    jvmtiError err = env->GetThreadInfo(thread, &info);
+    jvmtiError err = jvmti_env->GetThreadInfo(thread, &info);
     if (err != JVMTI_ERROR_NONE) {
         outName = "<unknown>";
         return false;
@@ -91,11 +105,18 @@ static bool getThreadName(jvmtiEnv* env, jthread thread, std::string& outName) {
 
     outName = (info.name != nullptr) ? info.name : "<unnamed>";
 
+    // Clean up JVMTI allocated string
     if (info.name != nullptr) {
-        env->Deallocate((unsigned char*)info.name);
+        jvmti_env->Deallocate((unsigned char*)info.name);
     }
-    // info.thread_group / info.context_class_loader are local jobject refs
-    // owned by the calling JNIEnv; we don't use them here.
+
+    // CRITICAL FIX: Clean up JNI local references to prevent JNI table overflow
+    if (info.thread_group != nullptr) {
+        jni_env->DeleteLocalRef(info.thread_group);
+    }
+    if (info.context_class_loader != nullptr) {
+        jni_env->DeleteLocalRef(info.context_class_loader);
+    }
 
     return true;
 }
@@ -127,7 +148,7 @@ static void JNICALL MonitorContendedEnter(
     jvmtiMonitorUsage usage{};
     jvmtiError err = jvmti_env->GetObjectMonitorUsage(object, &usage);
     if (err != JVMTI_ERROR_NONE) {
-        std::cout << "[JVMTI] GetObjectMonitorUsage failed, err=" << err << std::endl;
+        AGENT_LOG("GetObjectMonitorUsage failed, err=" << err);
         return;
     }
 
@@ -152,27 +173,27 @@ static void JNICALL MonitorContendedEnter(
     jlong lockAddress     = getOrAssignTag(jvmti_env, object, g_nextMonitorId);
 
     if (waitingThreadId < 0 || ownerThreadId < 0 || lockAddress < 0) {
-        std::cout << "[JVMTI] Failed to assign tags, dropping event" << std::endl;
+        AGENT_LOG("Failed to assign tags, dropping event");
         return;
     }
 
     // 3. Get real thread names.
     std::string waitingThreadName;
     std::string ownerThreadName;
-    getThreadName(jvmti_env, thread, waitingThreadName);
-    getThreadName(jvmti_env, owner, ownerThreadName);
+    getThreadName(jvmti_env, jni_env, thread, waitingThreadName);
+    getThreadName(jvmti_env, jni_env, owner, ownerThreadName);
 
     jlong timestamp = currentTimestampMillis();
 
-    std::cout << "[JVMTI] LockOwned event: waiting="
+    AGENT_LOG("LockOwned event: waiting="
               << waitingThreadName << "(" << waitingThreadId << ") owner="
               << ownerThreadName << "(" << ownerThreadId << ") lock="
-              << lockAddress << std::endl;
+              << lockAddress);
 
     // 4. Forward straight to Java via publishLockOwned(...). No local
     //    decision-making about deadlocks happens here.
     if (g_bridgeClass == nullptr || g_publishLockOwnedId == nullptr) {
-        std::cout << "[JVMTI] Bridge class/method not initialized, dropping event" << std::endl;
+        AGENT_LOG("Bridge class/method not initialized, dropping event");
         return;
     }
 
@@ -191,7 +212,7 @@ static void JNICALL MonitorContendedEnter(
     );
 
     if (jni_env->ExceptionCheck()) {
-        std::cout << "[JVMTI] Exception thrown while calling publishLockOwned" << std::endl;
+        AGENT_LOG("Exception thrown while calling publishLockOwned");
         jni_env->ExceptionDescribe();
         jni_env->ExceptionClear();
     }
@@ -211,10 +232,10 @@ static void JNICALL MonitorContendedEntered(
         jthread thread,
         jobject object) {
 
-    std::cout << "[JVMTI] MonitorContendedEntered" << std::endl;
+    AGENT_LOG("MonitorContendedEntered");
 
     if (g_bridgeClass == nullptr || g_publishLockReleasedId == nullptr) {
-        std::cout << "[JVMTI] Bridge class/method not initialized, dropping event" << std::endl;
+        AGENT_LOG("Bridge class/method not initialized, dropping event");
         return;
     }
 
@@ -226,14 +247,14 @@ static void JNICALL MonitorContendedEntered(
     jlong lockAddress = getOrAssignTag(jvmti_env, object, g_nextMonitorId);
 
     if (threadId < 0 || lockAddress < 0) {
-        std::cout << "[JVMTI] Failed to resolve tags, dropping event" << std::endl;
+        AGENT_LOG("Failed to resolve tags, dropping event");
         return;
     }
 
     jlong timestamp = currentTimestampMillis();
 
-    std::cout << "[JVMTI] LockReleased event (wait edge removed): thread="
-              << threadId << " lock=" << lockAddress << std::endl;
+    AGENT_LOG("LockReleased event (wait edge removed): thread="
+              << threadId << " lock=" << lockAddress);
 
     jni_env->CallStaticVoidMethod(
         g_bridgeClass,
@@ -244,7 +265,7 @@ static void JNICALL MonitorContendedEntered(
     );
 
     if (jni_env->ExceptionCheck()) {
-        std::cout << "[JVMTI] Exception thrown while calling publishLockReleased" << std::endl;
+        AGENT_LOG("Exception thrown while calling publishLockReleased");
         jni_env->ExceptionDescribe();
         jni_env->ExceptionClear();
     }
@@ -258,7 +279,7 @@ static void JNICALL MonitorWait(
         jobject object,
         jlong timeout) {
 
-    std::cout << "[JVMTI] MonitorWait" << std::endl;
+    AGENT_LOG("MonitorWait");
 }
 
 // Thread wakes from Object.wait()
@@ -269,7 +290,7 @@ static void JNICALL MonitorWaited(
         jobject object,
         jboolean timed_out) {
 
-    std::cout << "[JVMTI] MonitorWaited" << std::endl;
+    AGENT_LOG("MonitorWaited");
 }
 
 /*
@@ -289,11 +310,11 @@ Java_com_virtual_1deadlock_1detection_LockDetectionAgent_jvmti_JvmtiBridge_initi
     jint result = jvm->GetEnv((void**)&jvmti, JVMTI_VERSION_21);
 
     if (result != JNI_OK || jvmti == nullptr) {
-        std::cout << "[JVMTI] Initialization Failed" << std::endl;
+        AGENT_LOG("Initialization Failed");
         return;
     }
 
-    std::cout << "[JVMTI] Initialized Successfully" << std::endl;
+    AGENT_LOG("Initialized Successfully");
 
     /*
      * ------------------------------------------------------------
@@ -312,11 +333,11 @@ Java_com_virtual_1deadlock_1detection_LockDetectionAgent_jvmti_JvmtiBridge_initi
 
     jvmtiError capError = jvmti->AddCapabilities(&capabilities);
     if (capError != JVMTI_ERROR_NONE) {
-        std::cout << "[JVMTI] Failed To Add Capabilities, err=" << capError << std::endl;
+        AGENT_LOG("Failed To Add Capabilities, err=" << capError);
         return;
     }
 
-    std::cout << "[JVMTI] Monitor Capabilities Enabled" << std::endl;
+    AGENT_LOG("Monitor Capabilities Enabled");
 
     /*
      * ------------------------------------------------------------
@@ -330,7 +351,7 @@ Java_com_virtual_1deadlock_1detection_LockDetectionAgent_jvmti_JvmtiBridge_initi
 
     jclass localClass = env->FindClass(TARGET_CLASS);
     if (localClass == nullptr) {
-        std::cout << "[JVMTI] Failed to find class: " << TARGET_CLASS << std::endl;
+        AGENT_LOG("Failed to find class: " << TARGET_CLASS);
         if (env->ExceptionCheck()) env->ExceptionClear();
         return;
     }
@@ -340,8 +361,8 @@ Java_com_virtual_1deadlock_1detection_LockDetectionAgent_jvmti_JvmtiBridge_initi
 
     g_publishLockOwnedId = env->GetStaticMethodID(g_bridgeClass, TARGET_METHOD, TARGET_METHOD_SIG);
     if (g_publishLockOwnedId == nullptr) {
-        std::cout << "[JVMTI] Failed to find method: " << TARGET_METHOD
-                  << " with signature " << TARGET_METHOD_SIG << std::endl;
+        AGENT_LOG("Failed to find method: " << TARGET_METHOD
+                  << " with signature " << TARGET_METHOD_SIG);
         if (env->ExceptionCheck()) env->ExceptionClear();
         return;
     }
@@ -349,13 +370,13 @@ Java_com_virtual_1deadlock_1detection_LockDetectionAgent_jvmti_JvmtiBridge_initi
     g_publishLockReleasedId = env->GetStaticMethodID(
         g_bridgeClass, TARGET_METHOD_RELEASED, TARGET_METHOD_RELEASED_SIG);
     if (g_publishLockReleasedId == nullptr) {
-        std::cout << "[JVMTI] Failed to find method: " << TARGET_METHOD_RELEASED
-                  << " with signature " << TARGET_METHOD_RELEASED_SIG << std::endl;
+        AGENT_LOG("Failed to find method: " << TARGET_METHOD_RELEASED
+                  << " with signature " << TARGET_METHOD_RELEASED_SIG);
         if (env->ExceptionCheck()) env->ExceptionClear();
         return;
     }
 
-    std::cout << "[JVMTI] Bridge class and method resolved" << std::endl;
+    AGENT_LOG("Bridge class and method resolved");
 
     /*
      * ------------------------------------------------------------
@@ -371,11 +392,11 @@ Java_com_virtual_1deadlock_1detection_LockDetectionAgent_jvmti_JvmtiBridge_initi
 
     jvmtiError callbackError = jvmti->SetEventCallbacks(&callbacks, sizeof(callbacks));
     if (callbackError != JVMTI_ERROR_NONE) {
-        std::cout << "[JVMTI] Failed To Register Callbacks, err=" << callbackError << std::endl;
+        AGENT_LOG("Failed To Register Callbacks, err=" << callbackError);
         return;
     }
 
-    std::cout << "[JVMTI] Callbacks Registered" << std::endl;
+    AGENT_LOG("Callbacks Registered");
 
     /*
      * ------------------------------------------------------------
@@ -385,11 +406,15 @@ Java_com_virtual_1deadlock_1detection_LockDetectionAgent_jvmti_JvmtiBridge_initi
 
     jvmti->SetEventNotificationMode(JVMTI_ENABLE, JVMTI_EVENT_MONITOR_CONTENDED_ENTER, nullptr);
     jvmti->SetEventNotificationMode(JVMTI_ENABLE, JVMTI_EVENT_MONITOR_CONTENDED_ENTERED, nullptr);
-    jvmti->SetEventNotificationMode(JVMTI_ENABLE, JVMTI_EVENT_MONITOR_WAIT, nullptr);
-    jvmti->SetEventNotificationMode(JVMTI_ENABLE, JVMTI_EVENT_MONITOR_WAITED, nullptr);
+    // MONITOR_WAIT / MONITOR_WAITED intentionally left disabled: they never
+    // call into Java (see MonitorWait/MonitorWaited above — they only
+    // std::cout), and they fire constantly on internal JVM/JFR threads,
+    // which was flooding the interactive shell's stdout and made the
+    // "vdd:>" prompt unusable. Re-enable only if you actually need to
+    // observe raw wait/notify traffic.
 
-    std::cout << "[JVMTI] Monitor Events Enabled" << std::endl;
-    std::cout << "[JVMTI] Agent Ready — pure event collector mode (no native deadlock detection)" << std::endl;
+    AGENT_LOG("Monitor Events Enabled");
+    AGENT_LOG("Agent Ready — pure event collector mode (no native deadlock detection)");
 }
 
 /*
@@ -407,5 +432,5 @@ Java_com_virtual_1deadlock_1detection_LockDetectionAgent_jvmti_JvmtiBridge_shutd
         g_bridgeClass = nullptr;
     }
 
-    std::cout << "[JVMTI] Agent Shutdown" << std::endl;
+    AGENT_LOG("Agent Shutdown");
 }

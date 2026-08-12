@@ -1,9 +1,6 @@
 spring:
   application:
     name: virtual_deadlock_detection
-    app:
-      seed-data:
-        enabled: false
 
   shell:
     interactive:
@@ -30,6 +27,15 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         jdbc:
           time_zone: UTC
+
+# Was nested under spring.application.app.seed-data.enabled — not a real
+# Spring Boot property path (spring.application only recognizes "name" and
+# a couple of others), so DatabaseSeeder's `@Value("${app.seed-data.enabled}")`
+# could never resolve it. Moved to the top-level "app" namespace where the
+# @Value lookup actually reads from.
+app:
+  seed-data:
+    enabled: false
 
 server:
   port: ${PORT:8081}
@@ -70,14 +76,31 @@ spring:
 
 ---
 # Web mode: dashboard/API only, shell disabled so it doesn't block the terminal
+#
+# IMPORTANT: spring.shell.interactive.enabled=false does NOT turn the shell
+# off — it switches the active ShellRunner to NonInteractiveShellRunner,
+# which then requires a command-line argument (the command to execute) and
+# throws + kills the whole application when none is given. That's what was
+# happening here: the web-profile process would start, log "Started...",
+# then immediately die with "In non interactive mode, it expected to have
+# at least one argument", taking the HTTP server down with it.
+# spring.shell.noninteractive.enabled is not a real Spring Shell property —
+# it was silently ignored.
+#
+# spring.autoconfigure.exclude can't be used to turn off
+# org.springframework.shell.core.autoconfigure.ShellRunnerAutoConfiguration
+# either — Spring Shell doesn't register it through the standard
+# META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports
+# mechanism, so Boot rejects the exclude at startup with "not an
+# auto-configuration class". Actual fix lives in
+# backend.config.WebProfileNoShellConfig: declaring our own
+# no-op ApplicationRunner bean for this profile satisfies
+# ShellRunnerAutoConfiguration#springShellApplicationRunner's
+# @ConditionalOnMissingBean(ApplicationRunner.class), so Spring Shell's own
+# runner is never created at all — no shell, no exit, just a plain server.
 spring:
   config:
     activate:
       on-profile: web
   main:
     web-application-type: servlet
-  shell:
-    interactive:
-      enabled: false
-    noninteractive:
-      enabled: false
