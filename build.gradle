@@ -5,7 +5,7 @@ plugins {
     id 'org.springframework.boot' version '4.1.0'
     id 'io.spring.dependency-management' version '1.1.7'
     id 'org.jetbrains.kotlin.jvm'
-    id 'com.gradleup.shadow' version '8.3.5'
+    id 'com.gradleup.shadow' version '8.3.9'
 }
 
 group = 'com.dixy'
@@ -79,7 +79,9 @@ jar {
 tasks.register('agentJar', ShadowJar) {
     archiveClassifier = 'agent'
     from sourceSets.main.output
+    exclude 'application*.yml', 'application*.properties'
     configurations = [project.configurations.agentRuntime]
+    relocate 'org.slf4j', 'com.virtual_deadlock_detection.shaded.slf4j'
     manifest {
         attributes(
                 "Premain-Class": "com.virtual_deadlock_detection.LockDetectionAgent.agent.VirtualDeadlockAgent",

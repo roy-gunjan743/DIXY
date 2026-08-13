@@ -95,24 +95,76 @@ public class GraphGateway {
             }
 
             case LOCK_OWNED -> {
+
+                /*
+                 * The native JVMTI event tells us:
+                 *
+                 * waitingThread -> lock -> ownerThread
+                 *
+                 * Therefore we must create BOTH graph relationships:
+                 *
+                 * waitingThread --WAITS_FOR--> lock
+                 * lock          --HOLDS-----> ownerThread
+                 */
+
+                GraphNode waitingNode = new GraphNode(
+                        eventDTO.getThreadId(),
+                        NodeType.VIRTUAL_THREAD,
+                        eventDTO.getThreadName()
+                );
+
                 GraphNode lockNode = new GraphNode(
                         eventDTO.getLockAddress(),
                         NodeType.LOCK,
                         "Monitor-" + eventDTO.getLockAddress()
                 );
 
-                GraphNode ownerNode = new GraphNode(
-                        eventDTO.getOwnerThreadId(),
-                        NodeType.VIRTUAL_THREAD,
-                        eventDTO.getOwnerThreadName()
+                waitForGraph.addNode(waitingNode);
+                waitForGraph.addNode(lockNode);
+
+                /*
+                 * Waiting thread is waiting for this lock.
+                 */
+                GraphEdge waitsEdge = new GraphEdge(
+                        waitingNode,
+                        lockNode,
+                        EdgeType.WAITS_FOR
+                );
+
+                waitForGraph.addEdge(waitsEdge);
+
+                log.debug(
+                        "Added native JVMTI wait edge: {}",
+                        waitsEdge
+                );
+
+                /*
+                 * The owner currently holds the lock.
+                 */
+                if (eventDTO.getOwnerThreadId() != 0
+                        && eventDTO.getOwnerThreadId() != eventDTO.getThreadId()) {
+
+                    GraphNode ownerNode = new GraphNode(
+                            eventDTO.getOwnerThreadId(),
+                            NodeType.VIRTUAL_THREAD,
+                            eventDTO.getOwnerThreadName()
                     );
 
-                waitForGraph.addNode(lockNode);
-                waitForGraph.addNode(ownerNode);
+                    waitForGraph.addNode(ownerNode);
 
-                GraphEdge edge = new GraphEdge(lockNode, ownerNode, EdgeType.HOLDS);
-                waitForGraph.addEdge(edge);
-                log.debug("Added lock owned edge: {}", edge);
+                    GraphEdge holdsEdge = new GraphEdge(
+                            lockNode,
+                            ownerNode,
+                            EdgeType.HOLDS
+                    );
+
+                    waitForGraph.addEdge(holdsEdge);
+
+                    log.debug(
+                            "Added native JVMTI holds edge: {}",
+                            holdsEdge
+                    );
+                }
             }
 
             case LOCK_RELEASE -> {

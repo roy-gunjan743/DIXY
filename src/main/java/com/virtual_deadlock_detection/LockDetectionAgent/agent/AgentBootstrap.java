@@ -1,6 +1,7 @@
 package com.virtual_deadlock_detection.LockDetectionAgent.agent;
 
 import com.virtual_deadlock_detection.LockDetectionAgent.collector.EventCollector;
+import com.virtual_deadlock_detection.LockDetectionAgent.jvmti.NativeEventBridge;
 import com.virtual_deadlock_detection.LockDetectionAgent.runtime.RuntimeContext;
 import com.virtual_deadlock_detection.graph.detector.DeadlockDetector;
 import com.virtual_deadlock_detection.graph.engine.GraphEngine;
@@ -16,29 +17,51 @@ public class AgentBootstrap {
         System.out.println("Initializing Agent Components");
         System.out.println("=================================");
 
+        /*
+         * Create the ONE shared EventCollector.
+         */
         eventCollector = new EventCollector();
 
-        System.out.println("Agent Components Initialized Successfully");
+        /*
+         * IMPORTANT:
+         * Connect the JVMTI bridge immediately.
+         *
+         * JVMTI can start generating events very early during JVM
+         * startup, so this MUST happen immediately after creating
+         * the EventCollector and BEFORE JVMTI initialization.
+         */
+        NativeEventBridge.setCollector(eventCollector);
+
+        System.out.println(
+                "NativeEventBridge connected to shared EventCollector"
+        );
+
+        System.out.println(
+                "Agent Components Initialized Successfully"
+        );
     }
 
     public EventCollector getEventCollector() {
         return eventCollector;
     }
 
-    // Was: EventSender.getGraph(). Now points at the one shared graph.
+    /*
+     * Shared WaitForGraph.
+     */
     public WaitForGraph getGraph() {
         return RuntimeContext.GRAPH;
     }
 
-    // Was: its own private `new DeadlockDetector()`. Now the shared instance
-    // (harmless either way since DeadlockDetector is stateless, but this
-    // keeps one source of truth as the codebase grows).
+    /*
+     * Shared DeadlockDetector.
+     */
     public DeadlockDetector getDetector() {
         return RuntimeContext.DETECTOR;
     }
 
-    // Was: RuntimeContext.engine() — ambiguous, resolved to the now-deleted
-    // agent.RuntimeContext duplicate. Now explicit.
+    /*
+     * Shared GraphEngine.
+     */
     public GraphEngine getGraphEngine() {
         return RuntimeContext.ENGINE;
     }

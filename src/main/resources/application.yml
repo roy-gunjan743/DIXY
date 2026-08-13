@@ -41,7 +41,7 @@ server:
   port: ${PORT:8081}
 
 security:
-  # Comma-separated list of origins allowed to call the API (used by SecurityConfig's CORS setup).
+  api-key: dixy-local-dev-key-123   # Comma-separated list of origins allowed to call the API (used by SecurityConfig's CORS setup).
   allowed-origins: ${ALLOWED_ORIGINS:http://localhost:3000}
 
 management:
