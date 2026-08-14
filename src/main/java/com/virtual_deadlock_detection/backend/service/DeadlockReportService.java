@@ -5,6 +5,7 @@ import com.virtual_deadlock_detection.backend.entity.DeadlockNodeEntity;
 import com.virtual_deadlock_detection.backend.entity.DeadlockReportEntity;
 import com.virtual_deadlock_detection.backend.repository.DeadlockReportRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -18,6 +19,7 @@ public class DeadlockReportService {
         this.repository = repository;
     }
 
+    @Transactional(readOnly = true)
     public List<DeadlockReportDTO> getAllReports() {
 
         return repository.findAll()
@@ -26,6 +28,7 @@ public class DeadlockReportService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
     public DeadlockReportDTO getReport(Long id) {
 
         return repository.findById(id)
