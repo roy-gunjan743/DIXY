@@ -7,9 +7,14 @@ import org.springframework.stereotype.Repository;
 import java.util.Optional;
 
 @Repository
-public interface ThreadRepository extends JpaRepository<ThreadEntity,Long> {
+public interface ThreadRepository extends JpaRepository<ThreadEntity, Long> {
 
-    Optional<ThreadEntity> findByThreadId(Long threadID);
+    Optional<ThreadEntity> findByThreadId(Long threadId);
+
     Optional<ThreadEntity> findByThreadName(String threadName);
-    Optional<ThreadEntity> findByThreadIdAndAppName(Long threadId, String appName);
+
+    Optional<ThreadEntity> findByThreadIdAndAppName(
+            Long threadId,
+            String appName
+    );
 }

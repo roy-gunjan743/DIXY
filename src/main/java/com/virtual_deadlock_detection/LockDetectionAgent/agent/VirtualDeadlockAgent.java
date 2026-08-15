@@ -26,6 +26,11 @@ public class VirtualDeadlockAgent {
         String serverUrl = options.getOrDefault("serverUrl", "http://localhost:8080");
         String appName = options.getOrDefault("appName", "unknown-app");
         String apiKey = options.get("apiKey");
+        RuntimeContext.configure(
+                serverUrl,
+                apiKey,
+                appName
+        );
 
         // Wire the shared graph's report sink so detected cycles get pushed
         // to the DIXY backend's existing /api/internal/deadlocks endpoint —
