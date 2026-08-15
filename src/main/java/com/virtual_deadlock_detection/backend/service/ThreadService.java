@@ -34,8 +34,22 @@ public class ThreadService {
         threadRepository.deleteById(id);
     }
 
+    /**
+     * Register a new thread or update an existing thread.
+     *
+     * synchronized is important because the agent can send
+     * multiple telemetry requests for the same JVM thread
+     * at almost the same time.
+     */
     @Transactional
-    public ThreadEntity registerOrUpdateThread(ThreadEntity thread) {
+    public synchronized ThreadEntity registerOrUpdateThread(
+            ThreadEntity thread) {
+
+        if (thread == null) {
+            throw new IllegalArgumentException(
+                    "Thread cannot be null"
+            );
+        }
 
         if (thread.getThreadId() == null) {
             throw new IllegalArgumentException(
@@ -43,12 +57,18 @@ public class ThreadService {
             );
         }
 
-        if (thread.getAppName() == null || thread.getAppName().isBlank()) {
+        if (thread.getAppName() == null
+                || thread.getAppName().isBlank()) {
+
             thread.setAppName("unknown-app");
         }
 
-        if (thread.getThreadName() == null || thread.getThreadName().isBlank()) {
-            thread.setThreadName("unknown-thread-" + thread.getThreadId());
+        if (thread.getThreadName() == null
+                || thread.getThreadName().isBlank()) {
+
+            thread.setThreadName(
+                    "unknown-thread-" + thread.getThreadId()
+            );
         }
 
         Optional<ThreadEntity> existing =
@@ -57,17 +77,24 @@ public class ThreadService {
                         thread.getAppName()
                 );
 
+        /*
+         * Thread already exists.
+         * Update only the information that is actually present.
+         */
         if (existing.isPresent()) {
 
             ThreadEntity current = existing.get();
 
             if (thread.getThreadName() != null
                     && !thread.getThreadName().isBlank()) {
-                current.setThreadName(thread.getThreadName());
+
+                current.setThreadName(
+                        thread.getThreadName()
+                );
             }
 
             /*
-             * Do NOT overwrite a valid state with null.
+             * Never replace a valid state with null.
              */
             if (thread.getState() != null) {
                 current.setState(thread.getState());
@@ -75,18 +102,21 @@ public class ThreadService {
 
             if (thread.getCarrierThread() != null
                     && !thread.getCarrierThread().isBlank()) {
-                current.setCarrierThread(thread.getCarrierThread());
+
+                current.setCarrierThread(
+                        thread.getCarrierThread()
+                );
             }
 
             return threadRepository.save(current);
         }
 
         /*
-         * A new thread must always have a valid state because
-         * threads.state is NOT NULL in the database.
+         * New thread.
          *
-         * If the first telemetry event doesn't contain a state,
-         * RUNNABLE is the safest initial state.
+         * The database requires state to be NOT NULL,
+         * so give a new thread a safe initial state when
+         * the first telemetry event doesn't contain one.
          */
         if (thread.getState() == null) {
             thread.setState(ThreadState.RUNNABLE);
@@ -94,6 +124,10 @@ public class ThreadService {
 
         return threadRepository.save(thread);
     }
+
+    /**
+     * Kept for ThreadController compatibility.
+     */
     public ThreadEntity registerThread(ThreadEntity thread) {
         return registerOrUpdateThread(thread);
     }

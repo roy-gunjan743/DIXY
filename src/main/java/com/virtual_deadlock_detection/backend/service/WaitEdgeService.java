@@ -18,9 +18,27 @@ public class WaitEdgeService {
         this.waitEdgeRepository = waitEdgeRepository;
     }
 
-    public WaitEdgeEntity createWaitEdge(
+    /**
+     * Creates a waiting-thread -> lock edge if it doesn't already exist.
+     *
+     * synchronized prevents concurrent telemetry requests from creating
+     * the same edge twice inside this VDD instance.
+     */
+    public synchronized WaitEdgeEntity createWaitEdge(
             ThreadEntity thread,
             LockEntity lock) {
+
+        if (thread == null) {
+            throw new IllegalArgumentException(
+                    "Waiting thread cannot be null"
+            );
+        }
+
+        if (lock == null) {
+            throw new IllegalArgumentException(
+                    "Lock cannot be null"
+            );
+        }
 
         return waitEdgeRepository
                 .findByWaitingThreadAndLock(thread, lock)
@@ -32,24 +50,9 @@ public class WaitEdgeService {
                     edge.setLock(lock);
 
                     return waitEdgeRepository.save(edge);
-
                 });
     }
 
-    /**
-     * Loads all wait-edges with waitingThread / lock / lock.ownerThread
-     * eagerly fetched (see WaitEdgeRepository.findAllWithThreadsAndLocks()).
-     *
-     * This app runs in two Spring profiles — "cli" (web-application-type:
-     * none, no servlet, no Open-Session-In-View) and "web" (servlet, OSIV
-     * on by default). Callers of getAllEdges() (StatusController's web
-     * dashboard, DeadlockCommands' CLI "status") both walk the lazy
-     * waitingThread/lock/ownerThread associations on the returned entities.
-     * That only ever worked for the web caller because OSIV happened to
-     * keep a session open for the request; the CLI caller has no such
-     * safety net. Fetching eagerly here makes the result safe to walk
-     * regardless of which profile/caller is asking.
-     */
     @Transactional(readOnly = true)
     public List<WaitEdgeEntity> getAllEdges() {
         return waitEdgeRepository.findAllWithThreadsAndLocks();
