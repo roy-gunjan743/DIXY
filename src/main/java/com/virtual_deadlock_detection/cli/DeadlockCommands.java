@@ -1,9 +1,6 @@
 package com.virtual_deadlock_detection.cli;
 
 import com.virtual_deadlock_detection.backend.dto.DeadlockReportDTO;
-import com.virtual_deadlock_detection.backend.repository.LockRepository;
-import com.virtual_deadlock_detection.backend.repository.ThreadRepository;
-import com.virtual_deadlock_detection.backend.repository.WaitEdgeRepository;
 import com.virtual_deadlock_detection.backend.service.DeadlockReportService;
 import com.virtual_deadlock_detection.backend.service.GraphService;
 import com.virtual_deadlock_detection.backend.service.LockService;
@@ -24,7 +21,6 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.shell.core.command.CommandContext;
 import org.springframework.shell.core.command.annotation.Command;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.io.PrintWriter;
 import java.time.Instant;
@@ -40,40 +36,20 @@ import java.util.List;
  *   vdd:> deadlocks clear
  * </pre>
  *
- * <p>All data shown here is real, live-captured data — there is no seed/demo
- * command. Threads, locks, and wait-edges are populated in the database by
- * an actual {@code -javaagent} attached to a real target JVM (via
- * {@code POST /api/telemetry} and {@code POST /api/internal/deadlocks});
- * "status" and "deadlocks detect" then run the real {@link
- * com.virtual_deadlock_detection.graph.detector.DeadlockDetector} against
- * that data, and "deadlocks list" shows real reports the agent already
- * detected and posted back.</p>
+ * All telemetry displayed by this CLI comes from the VDD backend database.
  *
- * <p>Built on the Spring Shell 4.0 command model ({@code @Command} from
- * {@code org.springframework.shell.core.command.annotation}, replacing the
- * removed {@code @ShellComponent}/{@code @ShellMethod}/{@code @ShellOption}
- * annotations from v2/v3). Output goes through {@code ctx.outputWriter()}
- * rather than raw {@code System.out} — the 4.x {@link CommandContext} exposes
- * the writer directly, which stays correctly wired to the active
- * terminal/writer in both interactive and non-interactive shell modes, and is
- * what Spring Shell's own test harness expects.</p>
+ * Threads, locks and wait-edges are populated by the instrumented target JVM.
+ * Deadlock reports are populated by the deadlock reporting pipeline.
  */
-// NOTE: no class-level @Transactional here. A class-level @Transactional
-// forces Spring to wrap this bean in a CGLIB proxy, and Spring Shell 4's
-// command scanner registers commands off the raw bean it receives from the
-// context. If that bean is a proxy rather than the plain DeadlockCommands
-// instance, its @Command-annotated methods aren't reliably discovered — the
-// whole "deadlocks"/"status" group silently vanishes from `help` with no
-// error. (Compare EventCommands, which has no @Transactional and whose
-// commands do show up.) @Transactional is applied per-method below, only on
-// the method that actually needs an atomic multi-row write (deadlocksClear).
 @Component
 public class DeadlockCommands {
 
-    private static final Logger log = LoggerFactory.getLogger(DeadlockCommands.class);
+    private static final Logger log =
+            LoggerFactory.getLogger(DeadlockCommands.class);
+
     private static final String GROUP = "Deadlock Commands";
 
-    // ── ANSI colour codes (works on most modern terminals) ──────────────────
+    // ANSI colour codes
     private static final String RESET  = "\u001B[0m";
     private static final String BOLD   = "\u001B[1m";
     private static final String RED    = "\u001B[31m";
@@ -87,246 +63,480 @@ public class DeadlockCommands {
     private final ThreadService threadService;
     private final LockService lockService;
     private final WaitEdgeService waitEdgeService;
-    private final ThreadRepository threadRepository;
-    private final LockRepository lockRepository;
-    private final WaitEdgeRepository waitEdgeRepository;
 
-    public DeadlockCommands(DeadlockReportService deadlockReportService,
-                            GraphService graphService,
-                            ThreadService threadService,
-                            LockService lockService,
-                            WaitEdgeService waitEdgeService,
-                            ThreadRepository threadRepository,
-                            LockRepository lockRepository,
-                            WaitEdgeRepository waitEdgeRepository) {
+    public DeadlockCommands(
+            DeadlockReportService deadlockReportService,
+            GraphService graphService,
+            ThreadService threadService,
+            LockService lockService,
+            WaitEdgeService waitEdgeService) {
+
         this.deadlockReportService = deadlockReportService;
         this.graphService = graphService;
         this.threadService = threadService;
         this.lockService = lockService;
         this.waitEdgeService = waitEdgeService;
-        this.threadRepository = threadRepository;
-        this.lockRepository = lockRepository;
-        this.waitEdgeRepository = waitEdgeRepository;
     }
 
-    // ────────────────────────────────────────────────────────────────────────
+    // -------------------------------------------------------------------------
     // status
-    // ────────────────────────────────────────────────────────────────────────
+    // -------------------------------------------------------------------------
 
-    /**
-     * Prints a full diagnostic status report to the terminal.
-     *
-     * <pre>vdd:> status</pre>
-     */
-    @Command(name = "status", description = "Show full diagnostic status (HEALTHY / WARNING / CRITICAL)", group = GROUP)
+    @Command(
+            name = "status",
+            description = "Show full diagnostic status (HEALTHY / WARNING / CRITICAL)",
+            group = GROUP
+    )
     public void status(CommandContext ctx) {
+
         PrintWriter out = ctx.outputWriter();
+
         try {
+
             long startNs = System.nanoTime();
 
-            List<ThreadEntity>   threads = threadService.getAllThreads();
-            List<LockEntity>     locks   = lockService.getAllLocks();
-            List<WaitEdgeEntity> edges   = waitEdgeService.getAllEdges();
+            List<ThreadEntity> threads =
+                    threadService.getAllThreads();
 
-            // Shared with "deadlocks detect" via GraphService.buildGraphFromDb()
-            // so both commands always agree on what's currently stored.
-            WaitForGraph graph = graphService.buildGraphFromDb();
-            List<DeadlockCycle> cycles = RuntimeContext.DETECTOR.detect(graph);
+            List<LockEntity> locks =
+                    lockService.getAllLocks();
+
+            List<WaitEdgeEntity> edges =
+                    waitEdgeService.getAllEdges();
+
+            WaitForGraph graph =
+                    graphService.buildGraphFromDb();
+
+            List<DeadlockCycle> cycles =
+                    RuntimeContext.DETECTOR.detect(graph);
 
             long pinnedCount = threads.stream()
-                    .filter(t -> t.getCarrierThread() != null && !t.getCarrierThread().isEmpty())
-                    .filter(t -> t.getState() == ThreadState.BLOCKED
-                            || t.getState() == ThreadState.WAITING
-                            || t.getState() == ThreadState.TIMED_WAITING)
+                    .filter(t ->
+                            t.getCarrierThread() != null &&
+                                    !t.getCarrierThread().isEmpty()
+                    )
+                    .filter(t ->
+                            t.getState() == ThreadState.BLOCKED ||
+                                    t.getState() == ThreadState.WAITING ||
+                                    t.getState() == ThreadState.TIMED_WAITING
+                    )
                     .count();
 
-            double scanMs = (System.nanoTime() - startNs) / 1_000_000.0;
+            double scanMs =
+                    (System.nanoTime() - startNs) / 1_000_000.0;
 
             String statusLabel;
             String statusColor;
+
             if (!cycles.isEmpty()) {
+
                 statusLabel = "CRITICAL";
                 statusColor = RED;
+
             } else if (pinnedCount > 0) {
+
                 statusLabel = "WARNING";
                 statusColor = YELLOW;
+
             } else {
+
                 statusLabel = "HEALTHY";
                 statusColor = GREEN;
             }
 
             StringBuilder sb = new StringBuilder();
-            sb.append("\n").append(CYAN).append(BOLD)
+
+            sb.append("\n")
+                    .append(CYAN)
+                    .append(BOLD)
                     .append("╔══════════════════════════════════════════╗\n")
                     .append("║   Virtual Deadlock Detector — Status     ║\n")
-                    .append("╚══════════════════════════════════════════╝").append(RESET).append("\n\n");
+                    .append("╚══════════════════════════════════════════╝")
+                    .append(RESET)
+                    .append("\n\n");
 
-            sb.append(WHITE).append("  Timestamp   : ").append(RESET).append(Instant.now()).append("\n");
-            sb.append(WHITE).append("  Status      : ").append(RESET)
-                    .append(statusColor).append(BOLD).append(statusLabel).append(RESET).append("\n\n");
+            sb.append(WHITE)
+                    .append("  Timestamp   : ")
+                    .append(RESET)
+                    .append(Instant.now())
+                    .append("\n");
 
-            sb.append(WHITE).append("  Threads     : ").append(RESET).append(threads.size()).append("\n");
-            sb.append(WHITE).append("  Locks       : ").append(RESET).append(locks.size()).append("\n");
-            sb.append(WHITE).append("  Wait Edges  : ").append(RESET).append(edges.size()).append("\n");
-            sb.append(WHITE).append("  Deadlocks   : ").append(RESET)
-                    .append(cycles.isEmpty() ? GREEN + "0" + RESET : RED + BOLD + cycles.size() + RESET).append("\n");
-            sb.append(WHITE).append("  Pinned VTs  : ").append(RESET)
-                    .append(pinnedCount == 0 ? GREEN + "0" + RESET : YELLOW + BOLD + pinnedCount + RESET).append("\n");
-            sb.append(WHITE).append("  Scan time   : ").append(RESET)
-                    .append(String.format("%.2f ms", scanMs)).append("\n");
+            sb.append(WHITE)
+                    .append("  Status      : ")
+                    .append(RESET)
+                    .append(statusColor)
+                    .append(BOLD)
+                    .append(statusLabel)
+                    .append(RESET)
+                    .append("\n\n");
+
+            sb.append(WHITE)
+                    .append("  Threads     : ")
+                    .append(RESET)
+                    .append(threads.size())
+                    .append("\n");
+
+            sb.append(WHITE)
+                    .append("  Locks       : ")
+                    .append(RESET)
+                    .append(locks.size())
+                    .append("\n");
+
+            sb.append(WHITE)
+                    .append("  Wait Edges  : ")
+                    .append(RESET)
+                    .append(edges.size())
+                    .append("\n");
+
+            sb.append(WHITE)
+                    .append("  Deadlocks   : ")
+                    .append(RESET)
+                    .append(
+                            cycles.isEmpty()
+                                    ? GREEN + "0" + RESET
+                                    : RED + BOLD + cycles.size() + RESET
+                    )
+                    .append("\n");
+
+            sb.append(WHITE)
+                    .append("  Pinned VTs  : ")
+                    .append(RESET)
+                    .append(
+                            pinnedCount == 0
+                                    ? GREEN + "0" + RESET
+                                    : YELLOW + BOLD + pinnedCount + RESET
+                    )
+                    .append("\n");
+
+            sb.append(WHITE)
+                    .append("  Scan time   : ")
+                    .append(RESET)
+                    .append(String.format("%.2f ms", scanMs))
+                    .append("\n");
 
             if (!cycles.isEmpty()) {
-                sb.append("\n").append(RED).append(BOLD).append("  ⚠  Deadlock Cycles Detected:\n").append(RESET);
+
+                sb.append("\n")
+                        .append(RED)
+                        .append(BOLD)
+                        .append("  ⚠  Deadlock Cycles Detected:\n")
+                        .append(RESET);
+
                 for (int i = 0; i < cycles.size(); i++) {
+
                     DeadlockCycle cycle = cycles.get(i);
-                    sb.append(RED).append("  Cycle ").append(i + 1).append(":\n").append(RESET);
+
+                    sb.append(RED)
+                            .append("  Cycle ")
+                            .append(i + 1)
+                            .append(":\n")
+                            .append(RESET);
+
                     for (GraphEdge e : cycle.getEdgesInCycle()) {
+
                         sb.append("    ")
                                 .append(e.getSource().getLabel())
-                                .append(YELLOW).append("  ──waits-for──>  ").append(RESET)
-                                .append(e.getTarget().getLabel()).append("\n");
+                                .append(YELLOW)
+                                .append("  ──waits-for──>  ")
+                                .append(RESET)
+                                .append(e.getTarget().getLabel())
+                                .append("\n");
                     }
                 }
             }
 
             out.println(sb);
             out.flush();
+
         } catch (DataAccessException e) {
-            log.error("status command failed: database access error", e);
-            printError(out, "Unable to read status — database is unreachable or query failed.");
+
+            log.error(
+                    "status command failed: database access error",
+                    e
+            );
+
+            printError(
+                    out,
+                    "Unable to read status — database is unreachable or query failed."
+            );
         }
     }
 
-    // ────────────────────────────────────────────────────────────────────────
+    // -------------------------------------------------------------------------
     // deadlocks list
-    // ────────────────────────────────────────────────────────────────────────
+    // -------------------------------------------------------------------------
 
-    /**
-     * Lists all stored deadlock reports from the database.
-     *
-     * <pre>vdd:> deadlocks list</pre>
-     */
-    @Command(name = { "deadlocks", "list" }, description = "List all stored deadlock reports", group = GROUP)
+    @Command(
+            name = { "deadlocks", "list" },
+            description = "List latest stored deadlock reports",
+            group = GROUP
+    )
     public void deadlocksList(CommandContext ctx) {
+
         PrintWriter out = ctx.outputWriter();
+
         try {
-            List<DeadlockReportDTO> reports = deadlockReportService.getAllReports();
+
+            List<DeadlockReportDTO> reports =
+                    deadlockReportService.getAllReports();
 
             if (reports.isEmpty()) {
-                out.println(GREEN + "  No deadlock reports found in database." + RESET);
+
+                out.println(
+                        GREEN +
+                                "  No deadlock reports found in database." +
+                                RESET
+                );
+
                 out.flush();
                 return;
             }
 
             StringBuilder sb = new StringBuilder();
-            sb.append("\n").append(CYAN).append(BOLD)
-                    .append(String.format("  %-6s  %-10s  %-8s  %-16s  %s\n",
-                            "ID", "SEVERITY", "RESOLVED", "DETECTED AT", "THREADS"))
+
+            sb.append("\n")
+                    .append(CYAN)
+                    .append(BOLD)
+                    .append(
+                            String.format(
+                                    "  %-6s  %-10s  %-8s  %-16s  %s\n",
+                                    "ID",
+                                    "SEVERITY",
+                                    "RESOLVED",
+                                    "DETECTED AT",
+                                    "THREADS"
+                            )
+                    )
                     .append(RESET);
-            sb.append(CYAN).append("  ").append("─".repeat(70)).append(RESET).append("\n");
+
+            sb.append(CYAN)
+                    .append("  ")
+                    .append("─".repeat(70))
+                    .append(RESET)
+                    .append("\n");
 
             for (DeadlockReportDTO r : reports) {
-                String sev = r.getSeverity();
-                String sevPadded = String.format("%-10s", sev);
-                String sevColored = "CRITICAL".equalsIgnoreCase(sev) ? RED + BOLD + sevPadded + RESET
-                        : "WARNING".equalsIgnoreCase(sev)  ? YELLOW + BOLD + sevPadded + RESET
-                        : GREEN + sevPadded + RESET;
-                String resolvedPadded = String.format("%-8s", r.isResolved() ? "YES" : "NO");
-                String resolved = r.isResolved() ? GREEN + resolvedPadded + RESET : YELLOW + resolvedPadded + RESET;
-                String threads   = r.getThreads() == null ? "-" : String.join(", ", r.getThreads());
 
-                sb.append(String.format("  %-6d  %s  %s  %-16s  %s\n",
-                        r.getId(), sevColored, resolved,
-                        r.getDetectedAt() != null ? r.getDetectedAt().toString() : "-",
-                        threads));
+                String sev = r.getSeverity();
+
+                String sevPadded =
+                        String.format("%-10s", sev);
+
+                String sevColored =
+                        "CRITICAL".equalsIgnoreCase(sev)
+                                ? RED + BOLD + sevPadded + RESET
+                                : "WARNING".equalsIgnoreCase(sev)
+                                ? YELLOW + BOLD + sevPadded + RESET
+                                : GREEN + sevPadded + RESET;
+
+                String resolvedPadded =
+                        String.format(
+                                "%-8s",
+                                r.isResolved() ? "YES" : "NO"
+                        );
+
+                String resolved =
+                        r.isResolved()
+                                ? GREEN + resolvedPadded + RESET
+                                : YELLOW + resolvedPadded + RESET;
+
+                String threads =
+                        r.getThreads() == null
+                                ? "-"
+                                : String.join(", ", r.getThreads());
+
+                sb.append(
+                        String.format(
+                                "  %-6d  %s  %s  %-16s  %s\n",
+                                r.getId(),
+                                sevColored,
+                                resolved,
+                                r.getDetectedAt() != null
+                                        ? r.getDetectedAt().toString()
+                                        : "-",
+                                threads
+                        )
+                );
             }
 
-            sb.append("\n").append(WHITE).append("  Total: ").append(RESET).append(reports.size()).append("\n");
+            sb.append("\n")
+                    .append(WHITE)
+                    .append("  Showing latest ")
+                    .append(RESET)
+                    .append(reports.size())
+                    .append(WHITE)
+                    .append(" report(s).\n")
+                    .append(RESET);
+
             out.println(sb);
             out.flush();
+
         } catch (DataAccessException e) {
-            log.error("deadlocks list command failed: database access error", e);
-            printError(out, "Unable to list deadlock reports — database is unreachable or query failed.");
+
+            log.error(
+                    "deadlocks list command failed: database access error",
+                    e
+            );
+
+            printError(
+                    out,
+                    "Unable to list deadlock reports — database is unreachable or query failed."
+            );
         }
     }
 
-    // ────────────────────────────────────────────────────────────────────────
+    // -------------------------------------------------------------------------
     // deadlocks detect
-    // ────────────────────────────────────────────────────────────────────────
+    // -------------------------------------------------------------------------
 
-    /**
-     * Runs live deadlock detection on the current in-memory WaitForGraph.
-     *
-     * <pre>vdd:> deadlocks detect</pre>
-     */
-    @Command(name = { "deadlocks", "detect" }, description = "Run live deadlock detection on the current WaitForGraph", group = GROUP)
+    @Command(
+            name = { "deadlocks", "detect" },
+            description = "Run live deadlock detection on the current WaitForGraph",
+            group = GROUP
+    )
     public void deadlocksDetect(CommandContext ctx) {
+
         PrintWriter out = ctx.outputWriter();
+
         try {
-            List<DeadlockCycle> cycles = graphService.detectDeadlocks();
+
+            List<DeadlockCycle> cycles =
+                    graphService.detectDeadlocks();
 
             if (cycles.isEmpty()) {
-                out.println(GREEN + BOLD + "\n  ✔  No deadlocks detected in current WaitForGraph.\n" + RESET);
+
+                out.println(
+                        GREEN +
+                                BOLD +
+                                "\n  ✔  No deadlocks detected in current WaitForGraph.\n" +
+                                RESET
+                );
+
                 out.flush();
                 return;
             }
 
             StringBuilder sb = new StringBuilder();
-            sb.append("\n").append(RED).append(BOLD)
-                    .append("  ✘  ").append(cycles.size()).append(" deadlock cycle(s) detected!\n\n")
+
+            sb.append("\n")
+                    .append(RED)
+                    .append(BOLD)
+                    .append("  ✘  ")
+                    .append(cycles.size())
+                    .append(" deadlock cycle(s) detected!\n\n")
                     .append(RESET);
 
             for (int i = 0; i < cycles.size(); i++) {
-                sb.append(RED).append(BOLD).append("  Cycle ").append(i + 1).append(":\n").append(RESET);
-                for (GraphEdge edge : cycles.get(i).getEdgesInCycle()) {
+
+                sb.append(RED)
+                        .append(BOLD)
+                        .append("  Cycle ")
+                        .append(i + 1)
+                        .append(":\n")
+                        .append(RESET);
+
+                for (GraphEdge edge :
+                        cycles.get(i).getEdgesInCycle()) {
+
                     sb.append("    ")
-                            .append(CYAN).append(edge.getSource().getLabel()).append(RESET)
-                            .append(YELLOW).append("  ──waits-for──>  ").append(RESET)
-                            .append(CYAN).append(edge.getTarget().getLabel()).append(RESET)
+                            .append(CYAN)
+                            .append(edge.getSource().getLabel())
+                            .append(RESET)
+                            .append(YELLOW)
+                            .append("  ──waits-for──>  ")
+                            .append(RESET)
+                            .append(CYAN)
+                            .append(edge.getTarget().getLabel())
+                            .append(RESET)
                             .append("\n");
                 }
+
                 sb.append("\n");
             }
 
             out.println(sb);
             out.flush();
+
         } catch (RuntimeException e) {
-            log.error("deadlocks detect command failed", e);
-            printError(out, "Detection failed unexpectedly — see application logs for details.");
+
+            log.error(
+                    "deadlocks detect command failed",
+                    e
+            );
+
+            printError(
+                    out,
+                    "Detection failed unexpectedly — see application logs for details."
+            );
         }
     }
 
-    // ────────────────────────────────────────────────────────────────────────
+    // -------------------------------------------------------------------------
     // deadlocks clear
-    // ────────────────────────────────────────────────────────────────────────
+    // -------------------------------------------------------------------------
 
     /**
-     * Clears all threads, locks, and wait-edges from the database.
+     * Clears all VDD telemetry data.
+     *
+     * Uses one PostgreSQL TRUNCATE operation through
+     * DeadlockReportService instead of Hibernate row-by-row
+     * deletion. This is important because the database can
+     * contain millions of telemetry rows.
      *
      * <pre>vdd:> deadlocks clear</pre>
      */
-    @Command(name = { "deadlocks", "clear" }, description = "Clear all threads, locks, and wait-edges from the database", group = GROUP)
-    @Transactional
+    @Command(
+            name = { "deadlocks", "clear" },
+            description = "Clear all VDD telemetry data",
+            group = GROUP
+    )
     public void deadlocksClear(CommandContext ctx) {
+
         PrintWriter out = ctx.outputWriter();
+
         try {
-            waitEdgeRepository.deleteAll();
-            lockRepository.deleteAll();
-            threadRepository.deleteAll();
-            out.println(GREEN + BOLD + "\n  ✔  Database cleared. Status: HEALTHY.\n" + RESET);
+
+            deadlockReportService.clearAllReports();
+
+            out.println(
+                    GREEN +
+                            BOLD +
+                            "\n  ✔  Database cleared. Status: HEALTHY.\n" +
+                            RESET
+            );
+
             out.flush();
+
         } catch (DataAccessException e) {
-            log.error("deadlocks clear command failed: database access error", e);
-            printError(out, "Failed to clear database — database is unreachable or write failed.");
+
+            log.error(
+                    "deadlocks clear command failed: database access error",
+                    e
+            );
+
+            printError(
+                    out,
+                    "Failed to clear database — database is unreachable or write failed."
+            );
         }
     }
 
-    // ────────────────────────────────────────────────────────────────────────
+    // -------------------------------------------------------------------------
     // Helpers
-    // ────────────────────────────────────────────────────────────────────────
+    // -------------------------------------------------------------------------
 
-    private void printError(PrintWriter out, String message) {
-        out.println(RED + BOLD + "  ✘  " + message + RESET);
+    private void printError(
+            PrintWriter out,
+            String message) {
+
+        out.println(
+                RED +
+                        BOLD +
+                        "  ✘  " +
+                        message +
+                        RESET
+        );
+
         out.flush();
     }
 }

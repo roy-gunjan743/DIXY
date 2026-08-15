@@ -91,4 +91,16 @@ public class DeadlockReportService {
                 entity.getDetectionStrategy()
         );
     }
+
+    /**
+     * Clears all VDD telemetry data.
+     *
+     * Uses a PostgreSQL-level TRUNCATE instead of Hibernate
+     * deleteAll/deleteAllInBatch because the database can contain
+     * millions of telemetry rows.
+     */
+    @Transactional
+    public void clearAllReports() {
+        repository.truncateAllTelemetry();
+    }
 }
