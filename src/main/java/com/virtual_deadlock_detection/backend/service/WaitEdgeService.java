@@ -19,10 +19,8 @@ public class WaitEdgeService {
     }
 
     /**
-     * Creates a waiting-thread -> lock edge if it doesn't already exist.
-     *
-     * synchronized prevents concurrent telemetry requests from creating
-     * the same edge twice inside this VDD instance.
+     * Create a wait edge only when the same
+     * thread -> lock relationship does not already exist.
      */
     public synchronized WaitEdgeEntity createWaitEdge(
             ThreadEntity thread,
@@ -53,6 +51,45 @@ public class WaitEdgeService {
                 });
     }
 
+    /**
+     * Remove every wait edge associated with a lock.
+     */
+    @Transactional
+    public void removeEdgesForLock(LockEntity lock) {
+
+        if (lock == null) {
+            return;
+        }
+
+        List<WaitEdgeEntity> edges =
+                waitEdgeRepository.findByLock(lock);
+
+        if (!edges.isEmpty()) {
+            waitEdgeRepository.deleteAll(edges);
+        }
+    }
+
+    /**
+     * Remove every wait edge originating from a thread.
+     */
+    @Transactional
+    public void removeEdgesForThread(ThreadEntity thread) {
+
+        if (thread == null) {
+            return;
+        }
+
+        List<WaitEdgeEntity> edges =
+                waitEdgeRepository.findByWaitingThread(thread);
+
+        if (!edges.isEmpty()) {
+            waitEdgeRepository.deleteAll(edges);
+        }
+    }
+
+    /**
+     * Used by the CLI and graph builder.
+     */
     @Transactional(readOnly = true)
     public List<WaitEdgeEntity> getAllEdges() {
         return waitEdgeRepository.findAllWithThreadsAndLocks();
