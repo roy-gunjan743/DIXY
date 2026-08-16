@@ -22,6 +22,15 @@ public interface WaitEdgeRepository extends JpaRepository<WaitEdgeEntity, Long> 
             LockEntity lock
     );
 
+    @org.springframework.data.jpa.repository.Modifying
+    @Query(value = "INSERT INTO wait_edges (waiting_thread_id, lock_id, created_at) " +
+            "VALUES (:waitingThreadId, :lockId, NOW()) " +
+            "ON CONFLICT (waiting_thread_id, lock_id) DO NOTHING", nativeQuery = true)
+    void insertIfNotExists(
+            @org.springframework.data.repository.query.Param("waitingThreadId") Long waitingThreadId,
+            @org.springframework.data.repository.query.Param("lockId") Long lockId
+    );
+
     /**
      * Loads every wait-edge together with its waiting thread, its lock, and
      * that lock's owner thread in a single query.

@@ -11,15 +11,27 @@ spring:
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:gupi@1234}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 30
+      minimum-idle: 10
+      connection-timeout: 20000
+      idle-timeout: 300000
+      max-lifetime: 1200000
 
   data:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
 
+  flyway:
+    baseline-on-migrate: true
+    baseline-version: 0
+    locations: classpath:db/migration
+
   jpa:
+    open-in-view: false
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: false
     properties:
       hibernate:
@@ -27,15 +39,6 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         jdbc:
           time_zone: UTC
-
-# Was nested under spring.application.app.seed-data.enabled — not a real
-# Spring Boot property path (spring.application only recognizes "name" and
-# a couple of others), so DatabaseSeeder's `@Value("${app.seed-data.enabled}")`
-# could never resolve it. Moved to the top-level "app" namespace where the
-# @Value lookup actually reads from.
-app:
-  seed-data:
-    enabled: false
 
 server:
   port: ${PORT:8081}

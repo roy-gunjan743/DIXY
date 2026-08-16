@@ -6,8 +6,8 @@ import com.virtual_deadlock_detection.backend.entity.DeadlockReportEntity;
 import com.virtual_deadlock_detection.backend.entity.ThreadEntity;
 import com.virtual_deadlock_detection.backend.enums.ThreadState;
 import com.virtual_deadlock_detection.backend.repository.DeadlockReportRepository;
-import com.virtual_deadlock_detection.backend.repository.ThreadRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -16,16 +16,17 @@ import java.util.List;
 public class AgentDeadlockService {
 
     private final DeadlockReportRepository reportRepository;
-    private final ThreadRepository threadRepository;
+    private final ThreadService threadService;
 
     public AgentDeadlockService(
             DeadlockReportRepository reportRepository,
-            ThreadRepository threadRepository) {
+            ThreadService threadService) {
 
         this.reportRepository = reportRepository;
-        this.threadRepository = threadRepository;
+        this.threadService = threadService;
     }
 
+    @Transactional
     public void save(AgentDeadlockDTO dto) {
 
         DeadlockReportEntity report = new DeadlockReportEntity();
@@ -41,18 +42,20 @@ public class AgentDeadlockService {
 
         int order = 1;
 
+        String instanceId = dto.getInstanceId() != null && !dto.getInstanceId().isBlank()
+                ? dto.getInstanceId()
+                : "unknown";
+
         for (AgentDeadlockDTO.ThreadRef ref : dto.getThreads()) {
 
-            ThreadEntity thread = threadRepository
-                    .findByThreadIdAndAppName(ref.getId(), dto.getAppName())
-                    .orElseGet(() -> {
-                        ThreadEntity t = new ThreadEntity();
-                        t.setThreadId(ref.getId());
-                        t.setThreadName(ref.getName());
-                        t.setAppName(dto.getAppName());
-                        t.setState(ThreadState.BLOCKED);
-                        return threadRepository.save(t);
-                    });
+            ThreadEntity t = new ThreadEntity();
+            t.setThreadId(ref.getId());
+            t.setThreadName(ref.getName());
+            t.setAppName(dto.getAppName());
+            t.setInstanceId(instanceId);
+            t.setState(ThreadState.BLOCKED);
+
+            ThreadEntity thread = threadService.registerOrUpdateThread(t);
 
             DeadlockNodeEntity node = new DeadlockNodeEntity();
 

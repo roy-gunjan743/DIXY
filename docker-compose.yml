@@ -42,8 +42,10 @@ services:
       DB_PASSWORD: gupi@1234
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      PORT: 8081
+      SPRING_PROFILES_ACTIVE: web
     ports:
-      - "8080:8080"
+      - "8081:8081"
   prometheus:
     image: prom/prometheus:latest
     container_name: vdd-prometheus

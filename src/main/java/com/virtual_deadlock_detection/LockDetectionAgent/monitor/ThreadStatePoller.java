@@ -11,7 +11,10 @@ import java.lang.management.ManagementFactory;
 import java.lang.management.ThreadInfo;
 import java.lang.management.ThreadMXBean;
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -25,6 +28,7 @@ public class ThreadStatePoller {
     private static final Logger log = LoggerFactory.getLogger(ThreadStatePoller.class);
     private final EventCollector collector;
     private final ThreadMXBean threadMXBean = ManagementFactory.getThreadMXBean();
+    private final Map<Long, Integer> activeBlockedLocks = new ConcurrentHashMap<>();
     private final ScheduledExecutorService scheduler =
             Executors.newSingleThreadScheduledExecutor(r -> {
                 Thread t = new Thread(r, "vld-thread-state-poller");
@@ -39,10 +43,11 @@ public class ThreadStatePoller {
     }
 
     private boolean isIgnoredThread(String threadName) {
-        if (threadName == null) return true;
+        if (threadName == null) return false;
         String name = threadName.toLowerCase();
         return name.equals("main") ||
                name.contains("jfr event stream") ||
+               name.contains("jfr periodic") ||
                name.contains("catalina-utility") ||
                name.contains("vld-thread-state-poller") ||
                name.contains("lettuce-timer") ||
@@ -57,9 +62,10 @@ public class ThreadStatePoller {
                name.contains("service thread") ||
                name.contains("vm thread") ||
                name.contains("http-nio") ||
-               name.contains("tomcat");
+               name.contains("tomcat") ||
+               name.contains("httpclient") ||
+               name.contains("virtualthread-unparker");
     }
-
 
     public void start(long intervalMillis) {
         if (running) return;
@@ -75,6 +81,7 @@ public class ThreadStatePoller {
     private void pollOnce() {
         try {
             ThreadInfo[] allThreads = threadMXBean.dumpAllThreads(true, true);
+            Set<Long> currentlyBlockedThreads = ConcurrentHashMap.newKeySet();
 
             for (ThreadInfo info : allThreads) {
                 if (info == null) continue;
@@ -87,17 +94,33 @@ public class ThreadStatePoller {
                 long ownerId = info.getLockOwnerId();
                 if (ownerId == -1) continue; // owner unknown — nothing to build an edge to
 
+                long threadId = info.getThreadId();
+                int lockHash = lockInfo.getIdentityHashCode();
+                currentlyBlockedThreads.add(threadId);
+
+                // Deduplicate: only fire event if this is a newly observed block or target lock changed
+                Integer previousLock = activeBlockedLocks.get(threadId);
+                if (previousLock != null && previousLock == lockHash) {
+                    continue;
+                }
+
+                activeBlockedLocks.put(threadId, lockHash);
+
                 EventDTO dto = new EventDTO();
-                dto.setEventType(EventType.LOCK_ACQUIRE);
-                dto.setThreadId(info.getThreadId());
+                dto.setEventType(EventType.THREAD_BLOCKED);
+                dto.setThreadId(threadId);
                 dto.setThreadName(info.getThreadName());
-                dto.setLockAddress(lockInfo.getIdentityHashCode());
+                dto.setLockAddress(lockHash);
                 dto.setOwnerThreadId(ownerId);
                 dto.setOwnerThreadName(info.getLockOwnerName());
                 dto.setTimestamp(LocalDateTime.now());
 
                 collector.collect(dto);
             }
+
+            // Cleanup threads that are no longer blocked
+            activeBlockedLocks.keySet().removeIf(tid -> !currentlyBlockedThreads.contains(tid));
+
         } catch (Throwable t) {
             log.debug("ThreadStatePoller: poll failed: {}", t.getMessage());
         }
