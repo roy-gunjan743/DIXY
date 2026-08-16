@@ -1,0 +1,61 @@
+name: Publish DIXY Release
+
+# Runs on every version tag pushed to the private DIXY source repo.
+# Builds the jars, then publishes a Release with only compiled
+# artifacts + launcher scripts to the PUBLIC dixy-cli repo.
+# Source code never leaves the private roy-gunjan743/DIXY repo.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout private source repo
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Build agent + CLI jars
+        run: ./gradlew clean agentJar bootJar
+
+      - name: Stage release assets
+        run: |
+          mkdir -p release-staging
+          cp build/libs/*-agent.jar release-staging/dixy-agent.jar
+          cp build/libs/virtual_deadlock_detection-*.jar release-staging/dixy-cli.jar
+          # only the plain (non-agent, non-plain-classifier) boot jar should
+          # match; adjust the glob above if you have more than 2 jars in libs/
+          cp dixy.sh release-staging/dixy.sh
+          cp dixy.bat release-staging/dixy.bat
+          chmod +x release-staging/dixy.sh
+
+      - name: Verify no source leaked into jars
+        run: |
+          for jar in release-staging/*.jar; do
+            if unzip -l "$jar" | grep -q '\.java$'; then
+              echo "::error::Source files found inside $jar — aborting release."
+              exit 1
+            fi
+          done
+          echo "Verified: no .java files in any release jar."
+
+      - name: Publish release to public dixy-cli repo
+        uses: softprops/action-gh-release@v2
+        with:
+          repository: roy-gunjan743/DIXY-CLI
+          token: ${{ secrets.RELEASES_REPO_TOKEN }}
+          tag_name: ${{ github.ref_name }}
+          name: DIXY ${{ github.ref_name }}
+          files: |
+            release-staging/dixy-agent.jar
+            release-staging/dixy-cli.jar
+            release-staging/dixy.sh
+            release-staging/dixy.bat
