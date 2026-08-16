@@ -30,9 +30,13 @@ jobs:
         run: |
           mkdir -p release-staging
           cp build/libs/*-agent.jar release-staging/dixy-agent.jar
+          # Remove the agent jar from build/libs so the glob below can't
+          # match it too (its filename shares the same prefix as the boot
+          # jar, e.g. virtual_deadlock_detection-0.0.1-SNAPSHOT-agent.jar
+          # vs virtual_deadlock_detection-0.0.1-SNAPSHOT.jar) — without this,
+          # cp receives 2 sources + a non-directory destination and fails.
+          rm build/libs/*-agent.jar
           cp build/libs/virtual_deadlock_detection-*.jar release-staging/dixy-cli.jar
-          # only the plain (non-agent, non-plain-classifier) boot jar should
-          # match; adjust the glob above if you have more than 2 jars in libs/
           cp dixy.sh release-staging/dixy.sh
           cp dixy.bat release-staging/dixy.bat
           chmod +x release-staging/dixy.sh
