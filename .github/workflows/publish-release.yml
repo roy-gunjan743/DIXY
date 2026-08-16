@@ -1,20 +1,27 @@
 name: Publish DIXY Release
 
-# Runs on every version tag pushed to the private DIXY source repo.
-# Builds the jars, then publishes a Release with only compiled
-# artifacts + launcher scripts to the PUBLIC dixy-cli repo.
-# Source code never leaves the private roy-gunjan743/DIXY repo.
+# Automatically builds and publishes prebuilt release artifacts
+# (dixy-agent.jar, dixy-cli.jar, dixy.bat, dixy.sh) to GitHub Releases.
 
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release tag (e.g. v0.1.0)'
+        required: true
+        default: 'v0.1.0'
+
+permissions:
+  contents: write
 
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout private source repo
+      - name: Checkout source repo
         uses: actions/checkout@v4
 
       - name: Set up JDK 21
@@ -23,41 +30,54 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
       - name: Build agent + CLI jars
-        run: ./gradlew clean agentJar bootJar
+        run: ./gradlew clean agentJar bootJar -x test
 
       - name: Stage release assets
         run: |
           mkdir -p release-staging
           cp build/libs/*-agent.jar release-staging/dixy-agent.jar
-          # Remove the agent jar from build/libs so the glob below can't
-          # match it too (its filename shares the same prefix as the boot
-          # jar, e.g. virtual_deadlock_detection-0.0.1-SNAPSHOT-agent.jar
-          # vs virtual_deadlock_detection-0.0.1-SNAPSHOT.jar) — without this,
-          # cp receives 2 sources + a non-directory destination and fails.
-          rm build/libs/*-agent.jar
-          cp build/libs/virtual_deadlock_detection-*.jar release-staging/dixy-cli.jar
-          cp dixy.sh release-staging/dixy.sh
-          cp dixy.bat release-staging/dixy.bat
-          chmod +x release-staging/dixy.sh
+          rm -f build/libs/*-agent.jar build/libs/*-plain.jar
+          cp build/libs/*.jar release-staging/dixy-cli.jar
+          if [ -f dixy.sh ]; then cp dixy.sh release-staging/dixy.sh; chmod +x release-staging/dixy.sh; fi
+          if [ -f dixy.bat ]; then cp dixy.bat release-staging/dixy.bat; fi
 
-      - name: Verify no source leaked into jars
+      - name: Verify release artifacts
         run: |
+          ls -la release-staging/
           for jar in release-staging/*.jar; do
             if unzip -l "$jar" | grep -q '\.java$'; then
               echo "::error::Source files found inside $jar — aborting release."
               exit 1
             fi
           done
-          echo "Verified: no .java files in any release jar."
+          echo "Verified: Compiled binary artifacts ready for release."
 
-      - name: Publish release to public dixy-cli repo
+      - name: Publish Release to GitHub
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag_name || github.ref_name }}
+          name: DIXY ${{ github.event.inputs.tag_name || github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            release-staging/dixy-agent.jar
+            release-staging/dixy-cli.jar
+            release-staging/dixy.sh
+            release-staging/dixy.bat
+
+      - name: Publish to public DIXY-CLI repo (if configured)
+        if: ${{ secrets.RELEASES_REPO_TOKEN != '' }}
         uses: softprops/action-gh-release@v2
         with:
           repository: roy-gunjan743/DIXY-CLI
           token: ${{ secrets.RELEASES_REPO_TOKEN }}
-          tag_name: ${{ github.ref_name }}
-          name: DIXY ${{ github.ref_name }}
+          tag_name: ${{ github.event.inputs.tag_name || github.ref_name }}
+          name: DIXY ${{ github.event.inputs.tag_name || github.ref_name }}
           files: |
             release-staging/dixy-agent.jar
             release-staging/dixy-cli.jar

@@ -23,6 +23,22 @@ if not exist "%CLI_JAR%" (
     exit /b 1
 )
 
+if /i "%~1"=="agent-path" (
+    echo %AGENT_JAR%
+    exit /b 0
+)
+
+if /i "%~1"=="version" (
+    echo DIXY 0.0.1-SNAPSHOT
+    exit /b 0
+)
+
+if /i "%~1"=="cli" (
+    echo [dixy] Launching DIXY CLI...
+    java -jar "%CLI_JAR%"
+    exit /b %ERRORLEVEL%
+)
+
 rem ---- Step 1: locate the target jar ---------------------------------
 set "TARGET_JAR=%~1"
 
@@ -37,8 +53,9 @@ if "%TARGET_JAR%"=="" (
         )
     )
     if "!COUNT!"=="0" (
-        echo [ERROR] No target .jar found. Pass one explicitly: dixy.bat path\to\app.jar
-        exit /b 1
+        echo [dixy] Launching DIXY CLI standalone...
+        java -jar "%CLI_JAR%"
+        exit /b %ERRORLEVEL%
     )
     if "!COUNT!"=="1" (
         set "TARGET_JAR=!CANDIDATE1!"
