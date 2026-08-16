@@ -31,6 +31,8 @@ public class LockService {
         return lockRepository.findAll();
     }
 
+    /** @deprecated Use instance-scoped lookup where possible. */
+    @Deprecated
     public Optional<LockEntity> getLockByLockId(String lockId) {
         return lockRepository.findByLockId(lockId);
     }
@@ -40,44 +42,43 @@ public class LockService {
     }
 
     /**
-     * Registers a lock if it does not exist.
-     * Updates the existing lock if it already exists.
+     * Registers a lock if it does not exist; updates the existing record if it does.
      *
-     * synchronized prevents two telemetry requests in this
-     * VDD instance from inserting the same lock simultaneously.
+     * Lock identity is now composite: (lockId + instanceId).
+     * A lock_id value is a JVM memory address that is NOT globally unique —
+     * the same numeric address can appear in different JVM processes.
+    /**
+     * Registers a lock if it does not exist; updates the existing record if it does.
+     *
+     * Composite identity: (lockId + instanceId).
+     * Database-level uniqueness (uq_locks_lock_id_instance_id) is the authoritative
+     * guard across multiple backend pods and concurrent threads.
      */
-    public synchronized LockEntity registerOrUpdateLock(LockEntity lock) {
+    @Transactional
+    public LockEntity registerOrUpdateLock(LockEntity lock) {
 
         if (lock == null) {
-            throw new IllegalArgumentException(
-                    "Lock cannot be null"
-            );
+            throw new IllegalArgumentException("Lock cannot be null");
         }
 
         if (lock.getLockId() == null || lock.getLockId().isBlank()) {
-            throw new IllegalArgumentException(
-                    "Lock ID cannot be null or blank"
-            );
+            throw new IllegalArgumentException("Lock ID cannot be null or blank");
         }
 
-        Optional<LockEntity> existing =
-                lockRepository.findByLockId(lock.getLockId());
+        String instanceId = lock.getInstanceId() == null || lock.getInstanceId().isBlank()
+                ? "unknown" : lock.getInstanceId();
+        String lockType = lock.getLockType() == null ? "UNKNOWN" : lock.getLockType();
 
-        if (existing.isPresent()) {
+        lockRepository.upsertLock(lock.getLockId(), instanceId, lockType);
 
-            LockEntity current = existing.get();
+        LockEntity saved = lockRepository.findByLockIdAndInstanceId(lock.getLockId(), instanceId)
+                .orElse(lock);
 
-            if (lock.getLockType() != null) {
-                current.setLockType(lock.getLockType());
-            }
-
-            if (lock.getOwnerThread() != null) {
-                current.setOwnerThread(lock.getOwnerThread());
-            }
-
-            return lockRepository.save(current);
+        if (lock.getOwnerThread() != null) {
+            saved.setOwnerThread(lock.getOwnerThread());
+            return lockRepository.save(saved);
         }
 
-        return lockRepository.save(lock);
+        return saved;
     }
-}
+}

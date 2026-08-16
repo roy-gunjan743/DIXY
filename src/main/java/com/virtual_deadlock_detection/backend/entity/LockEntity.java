@@ -10,20 +10,39 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(name = "locks")
+@Table(
+    name = "locks",
+    uniqueConstraints = @UniqueConstraint(
+        name = "uq_locks_lock_id_instance_id",
+        columnNames = {"lock_id", "instance_id"}
+    )
+)
 public class LockEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false,unique = true)
+    /**
+     * Application-level lock identifier (JVM memory address of the monitor).
+     * NOT globally unique — different JVM instances can produce the same value.
+     * Identity must always be evaluated as (lockId + instanceId).
+     */
+    @Column(nullable = false)
     private String lockId;
+
+    /**
+     * Identifies the JVM/process that owns this lock record.
+     * Format: "pid-<pid>" as set by EventSender.
+     * Scopes lock identity so JVM-A/lock-123 != JVM-B/lock-123.
+     */
+    @Column(nullable = false)
+    private String instanceId;
 
     @Column(nullable = false)
     private String lockType;
 
-    @ManyToOne(fetch =FetchType.LAZY)
-    @JoinColumn(name ="owner_thread_id")
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "owner_thread_id")
     private ThreadEntity ownerThread;
 
     @Column(nullable = false)
@@ -31,12 +50,11 @@ public class LockEntity {
 
     @PrePersist
     public void prePersist() {
-        this.createdAt = LocalDateTime.now();}
+        this.createdAt = LocalDateTime.now();
+    }
 
     @OneToMany(mappedBy = "lock",
             cascade = CascadeType.ALL,
             orphanRemoval = true)
-    private List<WaitEdgeEntity>waitingthread=new ArrayList<>();
-
-
-}
+    private List<WaitEdgeEntity> waitingthread = new ArrayList<>();
+}

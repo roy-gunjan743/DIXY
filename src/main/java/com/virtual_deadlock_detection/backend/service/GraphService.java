@@ -20,19 +20,9 @@ import java.util.List;
 /**
  * Builds the wait-for graph and runs cycle detection on it.
  *
- * IMPORTANT: {@code detectDeadlocks()} used to run the detector against the
- * live, in-memory {@code RuntimeContext.GRAPH} singleton. That graph is only
- * ever populated by an in-process JVMTI/JFR agent attached to *this* JVM
- * (via GraphEngine.refresh() reading ThreadRegistry/LockRegistry/
- * WaitingRegistry). Nothing else feeds it: neither the CLI's
- * "deadlocks seed" command nor the /api/telemetry HTTP ingestion path touch
- * it — both only write to Postgres. As a result "deadlocks detect" would
- * always report zero cycles in a normal CLI/API session, even immediately
- * after seeding demo data, while "status" (which separately rebuilds a
- * graph from the DB) showed the deadlock correctly.
- *
- * This now rebuilds the graph from the same source of truth as "status" —
- * the wait_edges table — so every command agrees on what's actually stored.
+ * Rebuilds the graph from the wait_edges table (the single source of truth)
+ * populated by real ingested telemetry so every query path (CLI status,
+ * deadlocks detect, web dashboard) agrees on what is currently active.
  */
 @Service
 public class GraphService {
@@ -79,10 +69,13 @@ public class GraphService {
 
             ThreadEntity owner = lock.getOwnerThread();
             if (owner == null) continue;
-            if (waiting.getThreadId().equals(owner.getThreadId())) continue;
+            if (waiting.getId().equals(owner.getId())) continue;
 
-            GraphNode src = new GraphNode(waiting.getThreadId(), NodeType.VIRTUAL_THREAD, waiting.getThreadName());
-            GraphNode tgt = new GraphNode(owner.getThreadId(), NodeType.VIRTUAL_THREAD, owner.getThreadName());
+            String srcLabel = waiting.getThreadName() != null ? waiting.getThreadName() : "thread-" + waiting.getThreadId();
+            String tgtLabel = owner.getThreadName() != null ? owner.getThreadName() : "thread-" + owner.getThreadId();
+
+            GraphNode src = new GraphNode(waiting.getId(), NodeType.VIRTUAL_THREAD, srcLabel);
+            GraphNode tgt = new GraphNode(owner.getId(), NodeType.VIRTUAL_THREAD, tgtLabel);
             graph.addEdge(new GraphEdge(src, tgt, EdgeType.WAITS_FOR));
         }
 

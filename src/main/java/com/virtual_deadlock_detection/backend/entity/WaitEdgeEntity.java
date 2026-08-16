@@ -10,7 +10,15 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @NoArgsConstructor
 @Entity
-@Table(name = "wait_edges")
+@Table(
+    name = "wait_edges",
+    uniqueConstraints = {
+        @UniqueConstraint(
+            name = "uq_wait_edges_thread_lock",
+            columnNames = {"waiting_thread_id", "lock_id"}
+        )
+    }
+)
 public class WaitEdgeEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

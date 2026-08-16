@@ -46,6 +46,8 @@ dependencies {
     testCompileOnly 'org.projectlombok:lombok'
     testAnnotationProcessor 'org.projectlombok:lombok'
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
+    implementation 'org.springframework.boot:spring-boot-starter-flyway'
+    runtimeOnly 'org.flywaydb:flyway-database-postgresql'
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
     implementation "org.springframework.boot:spring-boot-starter-security"
     implementation 'org.springframework.shell:spring-shell-starter:4.0.3'

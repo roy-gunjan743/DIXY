@@ -26,6 +26,36 @@ public class ThreadService {
         return threadRepository.findAll();
     }
 
+    /**
+     * Instance and app-scoped thread lookup.
+     */
+    public Optional<ThreadEntity> getThreadByThreadIdAndAppNameAndInstanceId(
+            Long threadId,
+            String appName,
+            String instanceId) {
+        return threadRepository.findByThreadIdAndAppNameAndInstanceId(
+                threadId,
+                appName == null || appName.isBlank() ? "unknown-app" : appName,
+                instanceId == null || instanceId.isBlank() ? "unknown" : instanceId
+        );
+    }
+
+    /**
+     * Instance-scoped thread lookup.
+     */
+    public Optional<ThreadEntity> getThreadByThreadIdAndInstanceId(
+            Long threadId,
+            String instanceId) {
+        return threadRepository.findByThreadIdAndInstanceId(
+                threadId,
+                instanceId == null || instanceId.isBlank() ? "unknown" : instanceId
+        );
+    }
+
+    /**
+     * @deprecated Use {@link #getThreadByThreadIdAndAppNameAndInstanceId(Long, String, String)} instead.
+     */
+    @Deprecated
     public Optional<ThreadEntity> getThreadByThreadId(Long threadId) {
         return threadRepository.findByThreadId(threadId);
     }
@@ -37,12 +67,12 @@ public class ThreadService {
     /**
      * Register a new thread or update an existing thread.
      *
-     * synchronized is important because the agent can send
-     * multiple telemetry requests for the same JVM thread
-     * at almost the same time.
+     * Scoped to the composite identity (threadId + appName + instanceId).
+     * Database-level uniqueness (uq_threads_thread_id_app_name_instance_id)
+     * is the authoritative guard across multiple backend pods and concurrent threads.
      */
     @Transactional
-    public synchronized ThreadEntity registerOrUpdateThread(
+    public ThreadEntity registerOrUpdateThread(
             ThreadEntity thread) {
 
         if (thread == null) {
@@ -57,72 +87,29 @@ public class ThreadService {
             );
         }
 
-        if (thread.getAppName() == null
-                || thread.getAppName().isBlank()) {
+        String appName = thread.getAppName() == null || thread.getAppName().isBlank()
+                ? "unknown-app" : thread.getAppName();
+        String instanceId = thread.getInstanceId() == null || thread.getInstanceId().isBlank()
+                ? "unknown" : thread.getInstanceId();
+        String threadName = thread.getThreadName() == null || thread.getThreadName().isBlank()
+                ? "unknown-thread-" + thread.getThreadId() : thread.getThreadName();
+        String state = thread.getState() == null ? "RUNNABLE" : thread.getState().name();
+        String carrierThread = thread.getCarrierThread();
 
-            thread.setAppName("unknown-app");
-        }
+        threadRepository.upsertThread(
+                thread.getThreadId(),
+                appName,
+                instanceId,
+                threadName,
+                state,
+                carrierThread
+        );
 
-        if (thread.getThreadName() == null
-                || thread.getThreadName().isBlank()) {
-
-            thread.setThreadName(
-                    "unknown-thread-" + thread.getThreadId()
-            );
-        }
-
-        Optional<ThreadEntity> existing =
-                threadRepository.findByThreadIdAndAppName(
-                        thread.getThreadId(),
-                        thread.getAppName()
-                );
-
-        /*
-         * Thread already exists.
-         * Update only the information that is actually present.
-         */
-        if (existing.isPresent()) {
-
-            ThreadEntity current = existing.get();
-
-            if (thread.getThreadName() != null
-                    && !thread.getThreadName().isBlank()) {
-
-                current.setThreadName(
-                        thread.getThreadName()
-                );
-            }
-
-            /*
-             * Never replace a valid state with null.
-             */
-            if (thread.getState() != null) {
-                current.setState(thread.getState());
-            }
-
-            if (thread.getCarrierThread() != null
-                    && !thread.getCarrierThread().isBlank()) {
-
-                current.setCarrierThread(
-                        thread.getCarrierThread()
-                );
-            }
-
-            return threadRepository.save(current);
-        }
-
-        /*
-         * New thread.
-         *
-         * The database requires state to be NOT NULL,
-         * so give a new thread a safe initial state when
-         * the first telemetry event doesn't contain one.
-         */
-        if (thread.getState() == null) {
-            thread.setState(ThreadState.RUNNABLE);
-        }
-
-        return threadRepository.save(thread);
+        return threadRepository.findByThreadIdAndAppNameAndInstanceId(
+                thread.getThreadId(),
+                appName,
+                instanceId
+        ).orElse(thread);
     }
 
     /**
@@ -131,4 +118,4 @@ public class ThreadService {
     public ThreadEntity registerThread(ThreadEntity thread) {
         return registerOrUpdateThread(thread);
     }
-}
+}

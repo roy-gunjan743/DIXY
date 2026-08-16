@@ -15,7 +15,6 @@ import com.virtual_deadlock_detection.graph.registry.WaitForGraph;
 
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -64,66 +63,6 @@ public class StatusController {
         lockRepository.deleteAll();
         threadRepository.deleteAll();
         return ResponseEntity.ok("JVM Database Cleared. Status: HEALTHY.");
-    }
-
-    @PostMapping("/seed")
-    public ResponseEntity<String> seedStatus() {
-        waitEdgeRepository.deleteAll();
-        lockRepository.deleteAll();
-        threadRepository.deleteAll();
-
-        // 1. Create Deadlocked Threads
-        ThreadEntity t1 = createThread(10023L, "VirtualThread-10023", ThreadState.BLOCKED, "ForkJoinPool-1-worker-1");
-        ThreadEntity t2 = createThread(10024L, "VirtualThread-10024", ThreadState.BLOCKED, "ForkJoinPool-1-worker-2");
-
-
-        // 2. Create Pinned Threads (Warnings)
-        ThreadEntity p1 = createThread(2041L, "VirtualThread-2041", ThreadState.BLOCKED, "ForkJoinPool-1-worker-3");
-        ThreadEntity p2 = createThread(2089L, "VirtualThread-2089", ThreadState.BLOCKED, "ForkJoinPool-1-worker-7");
-
-        // 3. Create locks owned by deadlocked threads
-        LockEntity lock1 = createLock("Monitor-2351897819504", "synchronized block", t2);
-        LockEntity lock2 = createLock("Monitor-2351897819505", "synchronized block", t1);
-
-        // 4. Create locks owned by other threads for pinning
-        ThreadEntity carrierOwner1 = createThread(99991L, "CarrierOwner-1", ThreadState.RUNNABLE, null);
-        ThreadEntity carrierOwner2 = createThread(99992L, "CarrierOwner-2", ThreadState.RUNNABLE, null);
-        LockEntity pinLock1 = createLock("java.lang.Object@12abc3", "synchronized block", carrierOwner1);
-        LockEntity pinLock2 = createLock("java.lang.Object@5f99ee", "synchronized block", carrierOwner2);
-
-        // 5. Create Wait Edges to form the circular deadlock
-        createWaitEdge(t1, lock1);
-        createWaitEdge(t2, lock2);
-
-        // 6. Create Wait Edges for pinning
-        createWaitEdge(p1, pinLock1);
-        createWaitEdge(p2, pinLock2);
-
-        return ResponseEntity.ok("2-Way Deadlock Seeded. Status: CRITICAL.");
-    }
-
-    private ThreadEntity createThread(Long threadId, String threadName, ThreadState state, String carrierThread) {
-        ThreadEntity thread = new ThreadEntity();
-        thread.setThreadId(threadId);
-        thread.setThreadName(threadName);
-        thread.setState(state);
-        thread.setCarrierThread(carrierThread);
-        return threadRepository.save(thread);
-    }
-
-    private LockEntity createLock(String lockId, String lockType, ThreadEntity owner) {
-        LockEntity lock = new LockEntity();
-        lock.setLockId(lockId);
-        lock.setLockType(lockType);
-        lock.setOwnerThread(owner);
-        return lockRepository.save(lock);
-    }
-
-    private void createWaitEdge(ThreadEntity waiting, LockEntity lock) {
-        WaitEdgeEntity edge = new WaitEdgeEntity();
-        edge.setWaitingThread(waiting);
-        edge.setLock(lock);
-        waitEdgeRepository.save(edge);
     }
 
     @GetMapping

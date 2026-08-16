@@ -21,27 +21,30 @@ public class JfrEventListener {
     }
 
     private boolean isIgnoredThread(String threadName) {
-        if (threadName == null) return true;
+        if (threadName == null)
+            return false;
         String name = threadName.toLowerCase();
         return name.equals("main") ||
-               name.contains("jfr event stream") ||
-               name.contains("catalina-utility") ||
-               name.contains("vld-thread-state-poller") ||
-               name.contains("lettuce-timer") ||
-               name.contains("common-cleaner") ||
-               name.contains("reference handler") ||
-               name.contains("finalizer") ||
-               name.contains("signal dispatcher") ||
-               name.contains("attach listener") ||
-               name.contains("notification thread") ||
-               name.contains("compilerthread") ||
-               name.contains("sweeper") ||
-               name.contains("service thread") ||
-               name.contains("vm thread") ||
-               name.contains("http-nio") ||
-               name.contains("tomcat");
+                name.contains("jfr event stream") ||
+                name.contains("jfr periodic") ||
+                name.contains("catalina-utility") ||
+                name.contains("vld-thread-state-poller") ||
+                name.contains("lettuce-timer") ||
+                name.contains("common-cleaner") ||
+                name.contains("reference handler") ||
+                name.contains("finalizer") ||
+                name.contains("signal dispatcher") ||
+                name.contains("attach listener") ||
+                name.contains("notification thread") ||
+                name.contains("compilerthread") ||
+                name.contains("sweeper") ||
+                name.contains("service thread") ||
+                name.contains("vm thread") ||
+                name.contains("http-nio") ||
+                name.contains("tomcat") ||
+                name.contains("httpclient") ||
+                name.contains("virtualthread-unparker");
     }
-
 
     public void registerEvents(RecordingStream stream) {
 
@@ -50,12 +53,13 @@ public class JfrEventListener {
         stream.enable("jdk.JavaMonitorEnter");
         stream.enable("jdk.JavaMonitorWait");
         stream.enable("jdk.ThreadPark");
-        stream.enable("jdk.VirtualThreadPinned");
+        stream.enable("jdk.VirtualThreadPinned").withoutThreshold();
 
         // 1. Thread Start
         stream.onEvent("jdk.ThreadStart", event -> {
             RecordedThread thread = event.getThread("thread");
-            if (thread == null || isIgnoredThread(thread.getJavaName())) return;
+            if (thread == null || isIgnoredThread(thread.getJavaName()))
+                return;
 
             EventDTO dto = new EventDTO();
             dto.setEventType(EventType.THREAD_START);
@@ -68,7 +72,8 @@ public class JfrEventListener {
         // 2. Thread End
         stream.onEvent("jdk.ThreadEnd", event -> {
             RecordedThread thread = event.getThread();
-            if (thread == null || isIgnoredThread(thread.getJavaName())) return;
+            if (thread == null || isIgnoredThread(thread.getJavaName()))
+                return;
 
             EventDTO dto = new EventDTO();
             dto.setEventType(EventType.THREAD_END);
@@ -81,7 +86,8 @@ public class JfrEventListener {
         // 3. Thread Park (Virtual Thread specific blocking)
         stream.onEvent("jdk.ThreadPark", event -> {
             RecordedThread thread = event.getThread();
-            if (thread == null || isIgnoredThread(thread.getJavaName())) return;
+            if (thread == null || isIgnoredThread(thread.getJavaName()))
+                return;
 
             EventDTO dto = new EventDTO();
             dto.setEventType(EventType.THREAD_PARKED);
@@ -94,7 +100,8 @@ public class JfrEventListener {
         // 4. Java Monitor Enter (Lock Contention)
         stream.onEvent("jdk.JavaMonitorEnter", event -> {
             RecordedThread thread = event.getThread();
-            if (thread == null || isIgnoredThread(thread.getJavaName())) return;
+            if (thread == null || isIgnoredThread(thread.getJavaName()))
+                return;
 
             EventDTO dto = new EventDTO();
             dto.setEventType(EventType.LOCK_ACQUIRE);
@@ -122,7 +129,8 @@ public class JfrEventListener {
         // 5. Java Monitor Wait
         stream.onEvent("jdk.JavaMonitorWait", event -> {
             RecordedThread thread = event.getThread();
-            if (thread == null || isIgnoredThread(thread.getJavaName())) return;
+            if (thread == null || isIgnoredThread(thread.getJavaName()))
+                return;
 
             EventDTO dto = new EventDTO();
             dto.setEventType(EventType.THREAD_BLOCKED);
@@ -139,19 +147,51 @@ public class JfrEventListener {
 
         // 6. Virtual Thread Pinned
         stream.onEvent("jdk.VirtualThreadPinned", event -> {
-            RecordedThread thread = event.getThread();
-            if (thread == null || isIgnoredThread(thread.getJavaName())) return;
+            RecordedThread pinnedThread = null;
+            if (event.hasField("pinnedThread")) {
+                pinnedThread = event.getThread("pinnedThread");
+            }
+            if (pinnedThread == null) {
+                pinnedThread = event.getThread();
+            }
+
+            RecordedThread carrierThread = null;
+            if (event.hasField("carrierThread")) {
+                carrierThread = event.getThread("carrierThread");
+            }
+
+            if (pinnedThread != null && isIgnoredThread(pinnedThread.getJavaName()))
+                return;
 
             EventDTO dto = new EventDTO();
             dto.setEventType(EventType.PINNING);
-            dto.setThreadId(thread.getJavaThreadId());
-            dto.setThreadName(thread.getJavaName());
-            dto.setCarrierThreadId(thread.getOSThreadId());
-            dto.setCarrierThreadName("carrier-" + thread.getOSThreadId());
+
+            if (pinnedThread != null) {
+                dto.setThreadId(pinnedThread.getJavaThreadId());
+                dto.setThreadName(pinnedThread.getJavaName() != null ? pinnedThread.getJavaName()
+                        : "vthread-" + pinnedThread.getJavaThreadId());
+            } else {
+                dto.setThreadId(Thread.currentThread().threadId());
+                dto.setThreadName(Thread.currentThread().getName());
+            }
+
+            if (carrierThread != null) {
+                dto.setCarrierThreadId(carrierThread.getJavaThreadId());
+                dto.setCarrierThreadName(carrierThread.getJavaName() != null ? carrierThread.getJavaName()
+                        : "carrier-" + carrierThread.getJavaThreadId());
+            } else if (pinnedThread != null && pinnedThread.getOSThreadId() > 0) {
+                dto.setCarrierThreadId(pinnedThread.getOSThreadId());
+                dto.setCarrierThreadName("carrier-" + pinnedThread.getOSThreadId());
+            } else {
+                dto.setCarrierThreadId(0L);
+                dto.setCarrierThreadName("carrier-unknown");
+            }
+
             dto.setTimestamp(LocalDateTime.now());
             collector.collect(dto);
 
-            log.info("Virtual thread pinning detected: {} pinned to carrier {}", dto.getThreadName(), dto.getCarrierThreadName());
+            log.info("Virtual thread pinning detected: {} pinned to carrier {}", dto.getThreadName(),
+                    dto.getCarrierThreadName());
         });
     }
 }

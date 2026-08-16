@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class WaitEdgeService {
@@ -22,7 +23,8 @@ public class WaitEdgeService {
      * Create a wait edge only when the same
      * thread -> lock relationship does not already exist.
      */
-    public synchronized WaitEdgeEntity createWaitEdge(
+    @Transactional
+    public WaitEdgeEntity createWaitEdge(
             ThreadEntity thread,
             LockEntity lock) {
 
@@ -38,16 +40,21 @@ public class WaitEdgeService {
             );
         }
 
-        return waitEdgeRepository
-                .findByWaitingThreadAndLock(thread, lock)
+        Optional<WaitEdgeEntity> existing =
+                waitEdgeRepository.findByWaitingThreadAndLock(thread, lock);
+
+        if (existing.isPresent()) {
+            return existing.get();
+        }
+
+        waitEdgeRepository.insertIfNotExists(thread.getId(), lock.getId());
+
+        return waitEdgeRepository.findByWaitingThreadAndLock(thread, lock)
                 .orElseGet(() -> {
-
                     WaitEdgeEntity edge = new WaitEdgeEntity();
-
                     edge.setWaitingThread(thread);
                     edge.setLock(lock);
-
-                    return waitEdgeRepository.save(edge);
+                    return edge;
                 });
     }
 

@@ -4,7 +4,9 @@ import com.virtual_deadlock_detection.backend.dto.TelemetryRequest;
 import com.virtual_deadlock_detection.backend.dto.TelemetryResponse;
 import com.virtual_deadlock_detection.backend.entity.LockEntity;
 import com.virtual_deadlock_detection.backend.entity.ThreadEntity;
+import com.virtual_deadlock_detection.backend.enums.ThreadState;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class TelemetryService {
@@ -23,6 +25,7 @@ public class TelemetryService {
         this.waitEdgeService = waitEdgeService;
     }
 
+    @Transactional
     public TelemetryResponse processTelemetry(
             TelemetryRequest request) {
 
@@ -48,10 +51,16 @@ public class TelemetryService {
          * ---------------------------------------------------------
          */
 
+        String instanceId = request.getInstanceId() != null
+                && !request.getInstanceId().isBlank()
+                ? request.getInstanceId()
+                : "unknown";
+
         ThreadEntity thread = new ThreadEntity();
 
         thread.setThreadId(request.getThreadId());
         thread.setAppName(request.getAppName());
+        thread.setInstanceId(instanceId);
         thread.setThreadName(request.getThreadName());
         thread.setState(request.getState());
         thread.setCarrierThread(request.getCarrierThread());
@@ -81,31 +90,47 @@ public class TelemetryService {
                             : request.getLockType()
             );
 
-            /*
-             * For LOCK_OWNED / LOCK_ACQUIRE events, the event's
-             * thread is the owner.
-             */
-            if ("LOCK_OWNED".equals(eventType)
-                    || "LOCK_ACQUIRE".equals(eventType)) {
+            // Problem 1 fix: scope lock identity to the sending JVM instance.
+            // The lockId is a JVM memory address that is NOT globally unique;
+            // the composite (lockId + instanceId) is.
+            lock.setInstanceId(instanceId);
 
+            /*
+             * For LOCK_ACQUIRE events, the event's thread is the new owner.
+             */
+            if ("LOCK_ACQUIRE".equals(eventType)) {
                 lock.setOwnerThread(thread);
             }
 
             /*
-             * For a BLOCKED event, ownerThreadId tells us who owns
-             * the lock. Find that thread if it exists.
+             * For THREAD_BLOCKED or LOCK_OWNED events, ownerThreadId tells us who owns
+             * the lock. Find or register that owner thread within the same instance scope.
              */
-            if ("THREAD_BLOCKED".equals(eventType)
-                    && request.getOwnerThreadId() != null) {
+            if (("THREAD_BLOCKED".equals(eventType) || "LOCK_OWNED".equals(eventType))
+                    && request.getOwnerThreadId() != null
+                    && request.getOwnerThreadId() != 0
+                    && !request.getOwnerThreadId().equals(request.getThreadId())) {
 
                 ThreadEntity owner =
-                        threadService.getThreadByThreadId(
-                                request.getOwnerThreadId()
-                        ).orElse(null);
+                        threadService.getThreadByThreadIdAndAppNameAndInstanceId(
+                                request.getOwnerThreadId(),
+                                request.getAppName(),
+                                instanceId
+                        ).orElseGet(() -> {
+                            ThreadEntity newOwner = new ThreadEntity();
+                            newOwner.setThreadId(request.getOwnerThreadId());
+                            newOwner.setAppName(request.getAppName());
+                            newOwner.setInstanceId(instanceId);
+                            newOwner.setThreadName(
+                                    request.getOwnerThreadName() != null && !request.getOwnerThreadName().isBlank()
+                                            ? request.getOwnerThreadName()
+                                            : "thread-" + request.getOwnerThreadId()
+                            );
+                            newOwner.setState(ThreadState.RUNNABLE);
+                            return threadService.registerOrUpdateThread(newOwner);
+                        });
 
-                if (owner != null) {
-                    lock.setOwnerThread(owner);
-                }
+                lock.setOwnerThread(owner);
             }
 
             lock = lockService.registerOrUpdateLock(lock);
@@ -125,20 +150,7 @@ public class TelemetryService {
              * Thread -> Lock
              */
             case "THREAD_BLOCKED":
-
-                if (lock != null) {
-                    waitEdgeService.createWaitEdge(
-                            thread,
-                            lock
-                    );
-                }
-
-                break;
-
-            /*
-             * A parked thread can represent a waiting relationship
-             * when lock information is supplied by the agent.
-             */
+            case "LOCK_OWNED":
             case "THREAD_PARKED":
 
                 if (lock != null) {
@@ -188,10 +200,8 @@ public class TelemetryService {
                 break;
 
             /*
-             * Ownership information by itself does not create
-             * a waiting relationship.
+             * Other lifecycle events
              */
-            case "LOCK_OWNED":
             case "THREAD_START":
             case "PINNING":
             default:

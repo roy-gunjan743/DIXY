@@ -39,3 +39,4 @@ out/
 *.log
 
 release-staging/
+logs/
