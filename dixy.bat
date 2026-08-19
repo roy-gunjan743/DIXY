@@ -5,7 +5,7 @@ rem  DIXY launcher (Windows) — attaches the DIXY javaagent to a
 rem  target JVM app, then opens the DIXY CLI against it.
 rem
 rem  Usage:
-rem    dixy.bat                     (auto-detect target jar in cwd)
+rem    dixy.bat                     (auto-detect target jar: cwd, then build\libs, then target)
 rem    dixy.bat path\to\app.jar     (explicit target)
 rem ─────────────────────────────────────────────────────────────────
 
@@ -23,44 +23,83 @@ if not exist "%CLI_JAR%" (
     exit /b 1
 )
 
+rem ---- Handle known flags FIRST, before anything treats %1 as a jar ----
 if /i "%~1"=="agent-path" (
     echo %AGENT_JAR%
     exit /b 0
 )
 
-if /i "%~1"=="version" (
-    echo DIXY 0.0.1-SNAPSHOT
-    exit /b 0
-)
+if /i "%~1"=="version" goto show_version
+if /i "%~1"=="--version" goto show_version
+if /i "%~1"=="-v" goto show_version
+goto after_version
 
+:show_version
+echo DIXY 0.0.1-SNAPSHOT
+exit /b 0
+
+:after_version
 if /i "%~1"=="cli" (
     echo [dixy] Launching DIXY CLI...
     java -jar "%CLI_JAR%"
     exit /b %ERRORLEVEL%
 )
 
+rem ---- Reject anything else that looks like an unrecognized flag ----
+rem (prevents "--foo" from being silently treated as a jar filename)
+set "FIRST_ARG=%~1"
+if not "%FIRST_ARG%"=="" (
+    set "FIRST_CHAR=%FIRST_ARG:~0,1%"
+    if "!FIRST_CHAR!"=="-" (
+        echo [ERROR] Unknown option: %FIRST_ARG%
+        echo [dixy] Recognized commands: version, cli, agent-path
+        echo [dixy] Or run with no arguments to auto-attach to a jar in this folder.
+        exit /b 1
+    )
+)
+
 rem ---- Step 1: locate the target jar ---------------------------------
 set "TARGET_JAR=%~1"
 
 if "%TARGET_JAR%"=="" (
-    echo [dixy] No target jar given - scanning current directory...
+    echo [dixy] No target jar given - searching for a runnable jar...
+
+    rem Search order: current dir, then common build output folders
+    set "SEARCH_DIRS=. build\libs target"
+
     set "FOUND="
     set "COUNT=0"
-    for %%f in (*.jar) do (
-        if /i not "%%~nxf"=="dixy-agent.jar" if /i not "%%~nxf"=="dixy-cli.jar" (
-            set /a COUNT+=1
-            set "CANDIDATE!COUNT!=%%f"
+
+    for %%D in (!SEARCH_DIRS!) do (
+        if exist "%%D" (
+            for %%f in ("%%D\*.jar") do (
+                set "FNAME=%%~nxf"
+                rem Skip DIXY's own jars
+                if /i not "!FNAME!"=="dixy-agent.jar" if /i not "!FNAME!"=="dixy-cli.jar" (
+                    rem Skip Spring Boot's non-executable "-plain.jar" companion
+                    echo !FNAME! | findstr /i /c:"-plain.jar" >nul
+                    if errorlevel 1 (
+                        set /a COUNT+=1
+                        set "CANDIDATE!COUNT!=%%f"
+                    )
+                )
+            )
         )
+        rem Stop searching further dirs once we've found candidates here
+        if !COUNT! GTR 0 goto search_done
     )
+    :search_done
+
     if "!COUNT!"=="0" (
-        echo [dixy] Launching DIXY CLI standalone...
+        echo [dixy] No target jar found in this folder, build\libs, or target - launching DIXY CLI standalone...
         java -jar "%CLI_JAR%"
         exit /b %ERRORLEVEL%
     )
     if "!COUNT!"=="1" (
         set "TARGET_JAR=!CANDIDATE1!"
+        echo [dixy] Auto-detected target: !TARGET_JAR!
     ) else (
-        echo [dixy] Multiple jars found - pick one:
+        echo [dixy] Multiple candidate jars found - pick one:
         for /l %%i in (1,1,!COUNT!) do echo   %%i^) !CANDIDATE%%i!
         set /p CHOICE=Enter number:
         set "TARGET_JAR=!CANDIDATE%CHOICE%!"
