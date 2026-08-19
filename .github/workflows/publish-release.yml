@@ -12,7 +12,7 @@ on:
       tag_name:
         description: 'Release tag (e.g. v0.1.0)'
         required: true
-        default: 'v0.1.0'
+        default: 'v0.1.4'
 
 permissions:
   contents: write
