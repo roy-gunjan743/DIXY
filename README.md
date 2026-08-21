@@ -240,7 +240,7 @@ docker compose up -d postgres redis
 ```bash
 java -Duser.timezone=UTC \
      -Dspring.profiles.active=cli \
-     -jar build/libs/virtual_deadlock_detection-0.0.1-SNAPSHOT.jar
+     -jar build/libs/dixy-cli.jar
 ```
 
 ### 5. Or start Web Mode
@@ -248,7 +248,7 @@ java -Duser.timezone=UTC \
 ```bash
 java -Duser.timezone=UTC \
      -Dspring.profiles.active=web \
-     -jar build/libs/virtual_deadlock_detection-0.0.1-SNAPSHOT.jar
+     -jar build/libs/dixy-cli.jar
 ```
 
 ---
@@ -355,7 +355,7 @@ Start it using:
 ```bash
 java -Duser.timezone=UTC \
      -Dspring.profiles.active=web \
-     -jar build/libs/virtual_deadlock_detection-0.0.1-SNAPSHOT.jar
+     -jar build/libs/dixy-cli.jar
 ```
 
 The local server runs on:
