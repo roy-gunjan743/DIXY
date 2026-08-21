@@ -61,51 +61,59 @@ if not "%FIRST_ARG%"=="" (
 rem ---- Step 1: locate the target jar ---------------------------------
 set "TARGET_JAR=%~1"
 
-if "%TARGET_JAR%"=="" (
-    echo [dixy] No target jar given - searching for a runnable jar...
+if not "%TARGET_JAR%"=="" goto have_target
 
-    rem Search order: current dir, then common build output folders
-    set "SEARCH_DIRS=. build\libs target"
+echo [dixy] No target jar given - searching for a runnable jar...
 
-    set "FOUND="
-    set "COUNT=0"
+set "COUNT=0"
 
-    for %%D in (!SEARCH_DIRS!) do (
-        if exist "%%D" (
-            for %%f in ("%%D\*.jar") do (
-                set "FNAME=%%~nxf"
-                rem Skip DIXY's own jars
-                if /i not "!FNAME!"=="dixy-agent.jar" if /i not "!FNAME!"=="dixy-cli.jar" (
-                    rem Skip Spring Boot's non-executable "-plain.jar" companion
-                    echo !FNAME! | findstr /i /c:"-plain.jar" >nul
-                    if errorlevel 1 (
-                        set /a COUNT+=1
-                        set "CANDIDATE!COUNT!=%%f"
-                    )
-                )
-            )
-        )
-        rem Stop searching further dirs once we've found candidates here
-        if !COUNT! GTR 0 goto search_done
-    )
-    :search_done
+rem Search order: current dir, then common build output folders.
+rem scan_dir stops contributing once a prior dir has already yielded matches.
+for %%D in (. build\libs target) do call :scan_dir "%%D"
 
-    if "!COUNT!"=="0" (
-        echo [dixy] No target jar found in this folder, build\libs, or target - launching DIXY CLI standalone...
-        java -jar "%CLI_JAR%"
-        exit /b %ERRORLEVEL%
-    )
-    if "!COUNT!"=="1" (
-        set "TARGET_JAR=!CANDIDATE1!"
-        echo [dixy] Auto-detected target: !TARGET_JAR!
-    ) else (
-        echo [dixy] Multiple candidate jars found - pick one:
-        set "RPAREN=)"
-        for /l %%i in (1,1,!COUNT!) do echo   %%i!RPAREN! !CANDIDATE%%i!
-        set /p CHOICE=Enter number:
-        set "TARGET_JAR=!CANDIDATE%CHOICE%!"
-    )
+if !COUNT! GTR 0 goto have_candidates
+
+echo [dixy] No target jar found in this folder, build\libs, or target - launching DIXY CLI standalone...
+java -jar "%CLI_JAR%"
+exit /b %ERRORLEVEL%
+
+:have_candidates
+if !COUNT! EQU 1 (
+    set "TARGET_JAR=!CANDIDATE1!"
+    echo [dixy] Auto-detected target: !TARGET_JAR!
+    goto have_target
 )
+
+echo [dixy] Multiple candidate jars found - pick one:
+for /l %%i in (1,1,!COUNT!) do call :print_candidate %%i
+set /p CHOICE=Enter number:
+set "TARGET_JAR=!CANDIDATE%CHOICE%!"
+goto have_target
+
+rem ---- subroutines used above (never fallen into; only reached via CALL) ----
+:scan_dir
+if !COUNT! GTR 0 goto :eof
+if not exist "%~1" goto :eof
+for %%f in ("%~1\*.jar") do call :consider_jar "%%f"
+goto :eof
+
+:consider_jar
+set "FNAME=%~nx1"
+rem Skip DIXY's own jars
+if /i "!FNAME!"=="dixy-agent.jar" goto :eof
+if /i "!FNAME!"=="dixy-cli.jar" goto :eof
+rem Skip Spring Boot's non-executable "-plain.jar" companion
+echo !FNAME! | findstr /i /c:"-plain.jar" >nul
+if not errorlevel 1 goto :eof
+set /a COUNT+=1
+set "CANDIDATE!COUNT!=%~1"
+goto :eof
+
+:print_candidate
+echo   %1) !CANDIDATE%1!
+goto :eof
+
+:have_target
 
 echo [dixy] Target application: %TARGET_JAR%
 
