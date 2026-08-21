@@ -100,7 +100,8 @@ if "%TARGET_JAR%"=="" (
         echo [dixy] Auto-detected target: !TARGET_JAR!
     ) else (
         echo [dixy] Multiple candidate jars found - pick one:
-        for /l %%i in (1,1,!COUNT!) do echo   %%i^) !CANDIDATE%%i!
+        set "RPAREN=)"
+        for /l %%i in (1,1,!COUNT!) do echo   %%i!RPAREN! !CANDIDATE%%i!
         set /p CHOICE=Enter number:
         set "TARGET_JAR=!CANDIDATE%CHOICE%!"
     )
