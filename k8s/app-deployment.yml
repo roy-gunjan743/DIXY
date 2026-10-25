@@ -22,6 +22,15 @@ spec:
           ports:
             - containerPort: 8080
           env:
+            # application.yml binds server.port to ${PORT:8081}, but the
+            # Service and containerPort target 8080. Without this the pod
+            # listens on 8081 and the Service gets connection refused.
+            - name: PORT
+              value: "8080"
+            # The default profile starts the interactive Spring Shell, which
+            # has no terminal in a pod. docker-compose already uses "web".
+            - name: SPRING_PROFILES_ACTIVE
+              value: web
             - name: DB_HOST
               value: postgres
             - name: DB_PORT

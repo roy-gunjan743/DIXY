@@ -13,11 +13,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
-
-import java.util.List;
 
 public class GraphGateway {
 
@@ -32,7 +33,32 @@ public class GraphGateway {
         this.waitForGraph = waitForGraph;
     }
 
+    // Events arrive concurrently from the JVMTI callback, the JFR stream and
+    // the poller. Mutating the graph while another thread runs the DFS made
+    // the detector see half-applied updates. A ReentrantLock (parks, takes no
+    // monitor) serialises update+detect without generating the very monitor
+    // events this agent is watching for.
+    private final ReentrantLock graphLock = new ReentrantLock();
+
     public void processEvent(EventDTO eventDTO) {
+        List<DeadlockCycle> toReport;
+
+        graphLock.lock();
+        try {
+            applyEvent(eventDTO);
+            toReport = collectNewCycles();
+        } finally {
+            graphLock.unlock();
+        }
+
+        // Reporting is an async HTTP call - keep it outside the lock.
+        for (DeadlockCycle cycle : toReport) {
+            log.debug("Deadlock detected cycle: {}", cycle);
+            RuntimeContext.REPORT_SINK.report(cycle);
+        }
+    }
+
+    private void applyEvent(EventDTO eventDTO) {
         GraphNode threadNode = new GraphNode(
                 eventDTO.getThreadId(),
                 NodeType.VIRTUAL_THREAD,
@@ -54,8 +80,36 @@ public class GraphGateway {
                 log.debug("Thread Parked: {}", threadNode.getLabel());
             }
 
-            case LOCK_ACQUIRE,
-                 THREAD_BLOCKED -> {
+            case LOCK_ACQUIRE -> {
+                // Source: JFR jdk.JavaMonitorEnter. JFR emits that event when
+                // the thread has ALREADY got the monitor (it carries the wait
+                // duration), so it describes a finished wait, not a live
+                // one. Recording it as WAITS_FOR left an edge that nothing
+                // ever removed (its lock id is a native address, which no
+                // other source uses) and it later closed false cycles with
+                // live edges from the poller. Treat it as "wait is over".
+                GraphNode lockNode = new GraphNode(
+                        eventDTO.getLockAddress(),
+                        NodeType.LOCK,
+                        "Monitor-" + eventDTO.getLockAddress()
+                );
+                waitForGraph.removeEdge(new GraphEdge(
+                        threadNode,
+                        lockNode,
+                        EdgeType.WAITS_FOR
+                ));
+            }
+
+            case THREAD_BLOCKED -> {
+                // A blocked event with no known owner cannot be part of a
+                // cycle (nothing to follow from the lock). This is what
+                // JFR's jdk.JavaMonitorWait (Object.wait) produces - it is
+                // not contention for a monitor owned by someone else.
+                if (eventDTO.getOwnerThreadId() == 0) {
+                    log.debug("Ignoring THREAD_BLOCKED without owner: {}", threadNode.getLabel());
+                    return;
+                }
+
                 GraphNode lockNode = new GraphNode(
                         eventDTO.getLockAddress(),
                         NodeType.LOCK,
@@ -89,6 +143,8 @@ public class GraphGateway {
                             EdgeType.HOLDS
                     );
 
+                    // A monitor has exactly one owner: drop the previous one.
+                    waitForGraph.removeOutgoing(lockNode, EdgeType.HOLDS);
                     waitForGraph.addEdge(holdsEdge);
                     log.debug("Added holds edge: {}", holdsEdge);
                 }
@@ -158,6 +214,8 @@ public class GraphGateway {
                             EdgeType.HOLDS
                     );
 
+                    // A monitor has exactly one owner: drop the previous one.
+                    waitForGraph.removeOutgoing(lockNode, EdgeType.HOLDS);
                     waitForGraph.addEdge(holdsEdge);
 
                     log.debug(
@@ -173,6 +231,19 @@ public class GraphGateway {
                         NodeType.LOCK,
                         "Monitor-" + eventDTO.getLockAddress()
                 );
+
+                // This event means the thread is no longer waiting on the
+                // lock (JVMTI MonitorContendedEntered, or the poller seeing
+                // the thread leave BLOCKED). The WAITS_FOR edge created when
+                // the wait began must go, otherwise it stays forever and
+                // later joins up with other stale edges into a false cycle.
+                GraphEdge waitsEdge = new GraphEdge(
+                        threadNode,
+                        lockNode,
+                        EdgeType.WAITS_FOR
+                );
+                waitForGraph.removeEdge(waitsEdge);
+                log.debug("Removed wait edge: {}", waitsEdge);
 
                 GraphEdge holdsEdge = new GraphEdge(
                         lockNode,
@@ -208,26 +279,38 @@ public class GraphGateway {
                 log.debug("Unsupported Event: {}", eventDTO.getEventType());
             }
         }
-
-        detectDeadlocks();
     }
 
-    private void detectDeadlocks() {
-        List<DeadlockCycle> cycles = detector.detect(waitForGraph);
-        for (DeadlockCycle cycle : cycles) {
-            String signature = cycle.getEdgesInCycle().stream()
-                    .map(e -> e.getSource().getId() + "->" + e.getTarget().getId())
-                    .sorted()
-                    .collect(Collectors.joining("|"));
+    private List<DeadlockCycle> collectNewCycles() {
+        Instant now = Instant.now();
 
-            Instant last = reportedCycles.get(signature);
-            Instant now = Instant.now();
-            if (last == null || Duration.between(last, now).compareTo(REPORT_COOLDOWN) > 0) {
+        // Forget old signatures so the map cannot grow without bound.
+        reportedCycles.values().removeIf(
+                last -> Duration.between(last, now).compareTo(REPORT_COOLDOWN) > 0);
+
+        List<DeadlockCycle> fresh = new ArrayList<>();
+        for (DeadlockCycle cycle : detector.detect(waitForGraph)) {
+            // Identify a deadlock by the set of THREADS involved, not by its
+            // edges. Edge-based signatures included lock ids and traversal
+            // order, so the same persistent deadlock produced a new
+            // signature on almost every event and was re-reported hundreds
+            // of times instead of once per cooldown window.
+            // Names, not ids: the JVMTI bridge and the ThreadMXBean poller
+            // number the same thread differently, so one real deadlock can
+            // show up as two id sets but always has one set of names.
+            String signature = cycle.getCycle().stream()
+                    .filter(GraphNode::isThread)
+                    .map(GraphNode::getLabel)
+                    .distinct()
+                    .sorted()
+                    .collect(Collectors.joining(","));
+
+            if (!reportedCycles.containsKey(signature)) {
                 reportedCycles.put(signature, now);
-                log.debug("Deadlock detected cycle: {}", cycle);
-                RuntimeContext.REPORT_SINK.report(cycle);
+                fresh.add(cycle);
             }
         }
+        return fresh;
     }
 }
 

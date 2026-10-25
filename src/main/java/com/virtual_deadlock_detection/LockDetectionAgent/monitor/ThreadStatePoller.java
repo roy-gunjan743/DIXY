@@ -81,7 +81,11 @@ public class ThreadStatePoller {
     private void pollOnce() {
         try {
             ThreadInfo[] allThreads = threadMXBean.dumpAllThreads(true, true);
-            Set<Long> currentlyBlockedThreads = ConcurrentHashMap.newKeySet();
+
+            // Pass 1: work out who is blocked right now, without emitting
+            // anything yet.
+            Map<Long, ThreadInfo> blockedNow = new java.util.HashMap<>();
+            Map<Long, Integer> lockNow = new java.util.HashMap<>();
 
             for (ThreadInfo info : allThreads) {
                 if (info == null) continue;
@@ -94,11 +98,39 @@ public class ThreadStatePoller {
                 long ownerId = info.getLockOwnerId();
                 if (ownerId == -1) continue; // owner unknown — nothing to build an edge to
 
-                long threadId = info.getThreadId();
-                int lockHash = lockInfo.getIdentityHashCode();
-                currentlyBlockedThreads.add(threadId);
+                blockedNow.put(info.getThreadId(), info);
+                lockNow.put(info.getThreadId(), lockInfo.getIdentityHashCode());
+            }
 
-                // Deduplicate: only fire event if this is a newly observed block or target lock changed
+            // Pass 2: close waits that ended (or moved to another lock) FIRST.
+            // Previously nothing told the graph a thread had stopped waiting,
+            // so every THREAD_BLOCKED edge lived forever and eventually
+            // joined up with other stale edges into false deadlock cycles.
+            // Doing this before emitting new blocks also means the graph
+            // never holds the old and the new snapshot at the same time.
+            for (Map.Entry<Long, Integer> entry : activeBlockedLocks.entrySet()) {
+                long tid = entry.getKey();
+                Integer nowLock = lockNow.get(tid);
+                if (nowLock != null && nowLock.equals(entry.getValue())) {
+                    continue; // still blocked on the same lock
+                }
+                activeBlockedLocks.remove(tid);
+
+                EventDTO unblocked = new EventDTO();
+                unblocked.setEventType(EventType.LOCK_RELEASE);
+                unblocked.setThreadId(tid);
+                unblocked.setLockAddress(entry.getValue());
+                unblocked.setTimestamp(LocalDateTime.now());
+                collector.collect(unblocked);
+            }
+
+            // Pass 3: report newly observed blocks.
+            for (Map.Entry<Long, ThreadInfo> entry : blockedNow.entrySet()) {
+                long threadId = entry.getKey();
+                ThreadInfo info = entry.getValue();
+                int lockHash = lockNow.get(threadId);
+
+                // Deduplicate: only fire if this is a newly observed block
                 Integer previousLock = activeBlockedLocks.get(threadId);
                 if (previousLock != null && previousLock == lockHash) {
                     continue;
@@ -111,15 +143,12 @@ public class ThreadStatePoller {
                 dto.setThreadId(threadId);
                 dto.setThreadName(info.getThreadName());
                 dto.setLockAddress(lockHash);
-                dto.setOwnerThreadId(ownerId);
+                dto.setOwnerThreadId(info.getLockOwnerId());
                 dto.setOwnerThreadName(info.getLockOwnerName());
                 dto.setTimestamp(LocalDateTime.now());
 
                 collector.collect(dto);
             }
-
-            // Cleanup threads that are no longer blocked
-            activeBlockedLocks.keySet().removeIf(tid -> !currentlyBlockedThreads.contains(tid));
 
         } catch (Throwable t) {
             log.debug("ThreadStatePoller: poll failed: {}", t.getMessage());
