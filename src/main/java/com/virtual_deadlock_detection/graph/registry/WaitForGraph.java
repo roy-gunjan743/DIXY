@@ -1,5 +1,6 @@
 package com.virtual_deadlock_detection.graph.registry;
 
+import com.virtual_deadlock_detection.graph.model.EdgeType;
 import com.virtual_deadlock_detection.graph.model.GraphEdge;
 import com.virtual_deadlock_detection.graph.model.GraphNode;
 
@@ -66,10 +67,30 @@ public class WaitForGraph {
         );
     }
 
+    /**
+     * Removes every outgoing edge of the given type from a node. Used to
+     * enforce "a monitor has exactly one owner": before recording a new
+     * HOLDS edge for a lock the previous owner's edge has to go, otherwise
+     * stale ownership shows up later as a phantom cycle.
+     */
+    public void removeOutgoing(GraphNode node, EdgeType type) {
+
+        Set<GraphEdge> edges = adjacencyList.get(node);
+
+        if (edges != null) {
+
+            edges.removeIf(edge -> edge.getType() == type);
+        }
+    }
+
     public synchronized void rebuild(Collection<GraphEdge> edges) {
 
-        // Ignore invalid snapshots so we don't destroy the current graph
-        if (edges == null || edges.isEmpty()) {
+        // A null snapshot is invalid and must not destroy the current graph.
+        // An EMPTY snapshot is valid: it means nobody is waiting on anything
+        // any more, so the old edges (and the cycles they imply) must go.
+        // Returning early here used to leave resolved deadlocks in the
+        // graph forever.
+        if (edges == null) {
             return;
         }
 

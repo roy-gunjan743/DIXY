@@ -40,8 +40,22 @@ public class DeadlockDetector {
         }
 
         return cycles.stream()
+                .filter(DeadlockDetector::involvesMultipleThreads)
                 .map(cycle -> correlatePinning(cycle, graph))
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * Java monitors are reentrant, so a thread can never deadlock with
+     * itself. A "cycle" that only passes through one thread (thread -> lock
+     * -> same thread) is always a stale-edge artifact, never a real deadlock.
+     */
+    private static boolean involvesMultipleThreads(DeadlockCycle cycle) {
+        return cycle.getCycle().stream()
+                .filter(GraphNode::isThread)
+                .map(GraphNode::getId)
+                .distinct()
+                .count() >= 2;
     }
 
     private void findCycleDFS(GraphNode current, WaitForGraph graph, Set<GraphNode> visited,
