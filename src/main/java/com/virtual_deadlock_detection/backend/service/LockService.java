@@ -1,6 +1,7 @@
 package com.virtual_deadlock_detection.backend.service;
 
 import com.virtual_deadlock_detection.backend.entity.LockEntity;
+import com.virtual_deadlock_detection.backend.entity.ThreadEntity;
 import com.virtual_deadlock_detection.backend.repository.LockRepository;
 import com.virtual_deadlock_detection.backend.repository.ThreadRepository;
 import org.springframework.stereotype.Service;
@@ -21,6 +22,19 @@ public class LockService {
 
         this.lockRepository = lockRepository;
         this.threadRepository = threadRepository;
+    }
+
+    @Transactional
+    public void clearOwnerIfOwnedBy(LockEntity lock, ThreadEntity releasingThread) {
+        if (lock == null || releasingThread == null || releasingThread.getId() == null) return;
+        lockRepository.clearOwnerIfMatches(
+                lock.getLockId(), lock.getInstanceId(), releasingThread.getId());
+    }
+
+    @Transactional
+    public void clearOwnersForThread(ThreadEntity thread) {
+        if (thread == null || thread.getId() == null) return;
+        lockRepository.clearOwnersForThread(thread.getId());
     }
 
     public LockEntity saveLock(LockEntity lock) {
@@ -81,4 +95,4 @@ public class LockService {
 
         return saved;
     }
-}
+}

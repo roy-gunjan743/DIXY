@@ -14,15 +14,18 @@ public class TelemetryService {
     private final ThreadService threadService;
     private final LockService lockService;
     private final WaitEdgeService waitEdgeService;
+    private final MonitoringLifecycleService monitoringLifecycleService;
 
     public TelemetryService(
             ThreadService threadService,
             LockService lockService,
-            WaitEdgeService waitEdgeService) {
+            WaitEdgeService waitEdgeService,
+            MonitoringLifecycleService monitoringLifecycleService) {
 
         this.threadService = threadService;
         this.lockService = lockService;
         this.waitEdgeService = waitEdgeService;
+        this.monitoringLifecycleService = monitoringLifecycleService;
     }
 
     @Transactional
@@ -55,6 +58,8 @@ public class TelemetryService {
                 && !request.getInstanceId().isBlank()
                 ? request.getInstanceId()
                 : "unknown";
+
+        monitoringLifecycleService.recordTelemetry(instanceId, request.getAppName());
 
         ThreadEntity thread = new ThreadEntity();
 
@@ -170,7 +175,7 @@ public class TelemetryService {
             case "LOCK_ACQUIRE":
 
                 if (lock != null) {
-                    waitEdgeService.removeEdgesForLock(lock);
+                    waitEdgeService.removeWaitEdge(thread, lock);
                 }
 
                 break;
@@ -183,7 +188,7 @@ public class TelemetryService {
             case "LOCK_RELEASE":
 
                 if (lock != null) {
-                    waitEdgeService.removeEdgesForLock(lock);
+                    lockService.clearOwnerIfOwnedBy(lock, thread);
                 }
 
                 break;
@@ -196,6 +201,7 @@ public class TelemetryService {
             case "THREAD_END":
 
                 waitEdgeService.removeEdgesForThread(thread);
+                lockService.clearOwnersForThread(thread);
 
                 break;
 

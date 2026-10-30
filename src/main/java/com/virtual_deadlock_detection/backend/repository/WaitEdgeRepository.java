@@ -23,6 +23,13 @@ public interface WaitEdgeRepository extends JpaRepository<WaitEdgeEntity, Long> 
     );
 
     @org.springframework.data.jpa.repository.Modifying
+    @Query("DELETE FROM WaitEdgeEntity we WHERE we.waitingThread = :thread AND we.lock = :lock")
+    int deleteByWaitingThreadAndLock(
+            @org.springframework.data.repository.query.Param("thread") ThreadEntity thread,
+            @org.springframework.data.repository.query.Param("lock") LockEntity lock
+    );
+
+    @org.springframework.data.jpa.repository.Modifying
     @Query(value = "INSERT INTO wait_edges (waiting_thread_id, lock_id, created_at) " +
             "VALUES (:waitingThreadId, :lockId, NOW()) " +
             "ON CONFLICT (waiting_thread_id, lock_id) DO NOTHING", nativeQuery = true)

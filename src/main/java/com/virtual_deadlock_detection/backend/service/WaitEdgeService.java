@@ -59,6 +59,17 @@ public class WaitEdgeService {
     }
 
     /**
+     * Remove only the completed wait relationship for one thread and lock.
+     */
+    @Transactional
+    public void removeWaitEdge(ThreadEntity thread, LockEntity lock) {
+        if (thread == null || lock == null) {
+            return;
+        }
+        waitEdgeRepository.deleteByWaitingThreadAndLock(thread, lock);
+    }
+
+    /**
      * Remove every wait edge associated with a lock.
      */
     @Transactional

@@ -27,6 +27,20 @@ public interface LockRepository extends JpaRepository<LockEntity, Long> {
             @org.springframework.data.repository.query.Param("lockType") String lockType
     );
 
+    @org.springframework.data.jpa.repository.Modifying(flushAutomatically = true, clearAutomatically = true)
+    @org.springframework.data.jpa.repository.Query(value = "UPDATE locks SET owner_thread_id = NULL WHERE lock_id = :lockId AND instance_id = :instanceId AND owner_thread_id = :ownerThreadId", nativeQuery = true)
+    int clearOwnerIfMatches(
+            @org.springframework.data.repository.query.Param("lockId") String lockId,
+            @org.springframework.data.repository.query.Param("instanceId") String instanceId,
+            @org.springframework.data.repository.query.Param("ownerThreadId") Long ownerThreadId
+    );
+
+    @org.springframework.data.jpa.repository.Modifying(flushAutomatically = true, clearAutomatically = true)
+    @org.springframework.data.jpa.repository.Query(value = "UPDATE locks SET owner_thread_id = NULL WHERE owner_thread_id = :ownerThreadId", nativeQuery = true)
+    int clearOwnersForThread(
+            @org.springframework.data.repository.query.Param("ownerThreadId") Long ownerThreadId
+    );
+
     /**
      * Kept for backward compatibility with LockController (management/query path only).
      * Do NOT use this in telemetry processing — it ignores instance scope.
@@ -35,4 +49,4 @@ public interface LockRepository extends JpaRepository<LockEntity, Long> {
      */
     @Deprecated
     Optional<LockEntity> findByLockId(String lockId);
-}
+}
