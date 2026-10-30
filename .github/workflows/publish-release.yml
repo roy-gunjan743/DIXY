@@ -59,6 +59,13 @@ jobs:
           done
           echo "Verified: Compiled binary artifacts ready for release."
 
+      - name: Verify launcher release assets
+        run: |
+          test -s release-staging/dixy.bat
+          test -s release-staging/dixy.sh
+          test -s release-staging/VERSION
+          test -s release-staging/SHA256SUMS
+
       - name: Publish Release to GitHub
         uses: softprops/action-gh-release@v2
         with:
