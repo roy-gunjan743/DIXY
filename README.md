@@ -124,6 +124,52 @@ DIXY helps turn this hidden relationship into something that can be detected and
 
 # 🚀 Getting Started
 
+## Install
+
+The public release repository is `roy-gunjan743/DIXY-CLI`. Install the latest
+release with one command:
+
+**macOS / Linux**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/roy-gunjan743/DIXY-CLI/main/install.sh | sh
+```
+
+**Windows PowerShell**
+
+```powershell
+irm https://raw.githubusercontent.com/roy-gunjan743/DIXY-CLI/main/install.ps1 | iex
+```
+
+The installer requires Java 21+, downloads the CLI and native agent from a
+GitHub Release, verifies SHA-256 checksums, and installs to `~/.dixy` (Windows:
+`%USERPROFILE%\.dixy`). Re-running it upgrades the jars in place and preserves
+the install directory. Pin a release with `install.sh --version 1.0.0` or
+`install.ps1 -Version 1.0.0`; uninstall with `install.sh uninstall` or
+`install.ps1 -Uninstall`.
+
+Open a new terminal after installation, then run `dixy` from any directory.
+`dixy detect --pid <pid>`, `dixy detect --jar app.jar`, and `dixy detect --json`
+stream live telemetry and return exit code 1 when a deadlock cycle is found.
+
+To monitor a local application directory, pass its root to `dixy`. DIXY scans
+that directory for runnable jars, asks you to choose when there is more than
+one, starts the selected jar with the agent, and opens the shell:
+
+```powershell
+dixy C:\path\to\target\root
+dixy> detect
+```
+
+The `detect` command then performs a live scan of the selected target's real
+thread, lock, and wait-for telemetry every second. Press `Ctrl+C` to stop the
+scan or type `exit` to leave the shell. The same flow works on macOS and Linux:
+
+```bash
+dixy /path/to/target/root
+dixy> detect
+```
+
 ## 💻 Requirements
 
 | Tool | Needed for | Notes |
@@ -230,7 +276,7 @@ java "-Duser.timezone=UTC" "-Dspring.profiles.active=cli" `
   -jar build\libs\virtual_deadlock_detection-0.0.1-SNAPSHOT.jar
 ```
 
-You get a `vdd:>` prompt — see [CLI Mode](#️-cli-mode) for the commands.
+You get a `dixy>` prompt — see [CLI Mode](#️-cli-mode) for the commands.
 
 > **Windows shortcut:** `run-cli.bat` builds the jar, starts PostgreSQL + Redis, waits until PostgreSQL is healthy, and launches the CLI in one step.
 
@@ -346,15 +392,15 @@ java -Duser.timezone=UTC -Dspring.profiles.active=cli \
      -jar build/libs/virtual_deadlock_detection-0.0.1-SNAPSHOT.jar
 ```
 
-You will get a `vdd:>` prompt:
+You will get a `dixy>` prompt:
 
 ```text
-vdd:> status
-vdd:> threads list
-vdd:> locks list
-vdd:> events list
-vdd:> deadlocks detect
-vdd:> deadlocks list
+dixy> status
+dixy> threads list
+dixy> locks list
+dixy> events list
+dixy> deadlocks detect
+dixy> deadlocks list
 ```
 
 | Command | What it does |

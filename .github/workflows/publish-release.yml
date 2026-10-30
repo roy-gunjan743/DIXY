@@ -39,11 +39,14 @@ jobs:
       - name: Stage release assets
         run: |
           mkdir -p release-staging
+          VERSION="${GITHUB_REF_NAME#v}"
+          printf '%s\n' "$VERSION" > release-staging/VERSION
           cp build/libs/*-agent.jar release-staging/dixy-agent.jar
           rm -f build/libs/*-agent.jar build/libs/*-plain.jar
           cp build/libs/*.jar release-staging/dixy-cli.jar
           if [ -f dixy.sh ]; then cp dixy.sh release-staging/dixy.sh; chmod +x release-staging/dixy.sh; fi
           if [ -f dixy.bat ]; then cp dixy.bat release-staging/dixy.bat; fi
+          (cd release-staging && sha256sum dixy-cli.jar dixy-agent.jar > SHA256SUMS)
 
       - name: Verify release artifacts
         run: |
@@ -86,3 +89,7 @@ jobs:
             release-staging/dixy-cli.jar
             release-staging/dixy.sh
             release-staging/dixy.bat
+            release-staging/VERSION
+            release-staging/SHA256SUMS
+            release-staging/VERSION
+            release-staging/SHA256SUMS

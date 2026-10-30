@@ -55,8 +55,6 @@ public class DetectionPipelineLifecycle {
     @PostConstruct
     public void start() {
         if (!selfMonitoringEnabled) {
-            System.out.println("[DetectionPipeline] Self-monitoring is disabled (agent.self-monitoring.enabled=false)."
-                    + " This app instruments a target JVM via -javaagent; it does not watch itself by default.");
             return;
         }
 

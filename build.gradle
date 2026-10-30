@@ -72,6 +72,7 @@ jar {
     manifest {
         attributes(
                 "Premain-Class": "com.virtual_deadlock_detection.LockDetectionAgent.agent.VirtualDeadlockAgent",
+                "Agent-Class": "com.virtual_deadlock_detection.LockDetectionAgent.agent.VirtualDeadlockAgent",
                 "Can-Redefine-Classes": "true",
                 "Can-Retransform-Classes": "true"
         )
@@ -87,6 +88,7 @@ tasks.register('agentJar', ShadowJar) {
     manifest {
         attributes(
                 "Premain-Class": "com.virtual_deadlock_detection.LockDetectionAgent.agent.VirtualDeadlockAgent",
+            "Agent-Class": "com.virtual_deadlock_detection.LockDetectionAgent.agent.VirtualDeadlockAgent",
                 "Can-Redefine-Classes": "true",
                 "Can-Retransform-Classes": "true"
         )

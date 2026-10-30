@@ -10,11 +10,25 @@ import com.virtual_deadlock_detection.LockDetectionAgent.runtime.RuntimeContext;
 import java.lang.instrument.Instrumentation;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class VirtualDeadlockAgent {
 
+    private static final AtomicBoolean STARTED = new AtomicBoolean();
+
     public static void premain(String agentArgs, Instrumentation inst) {
 
+        start(agentArgs, inst);
+    }
+
+    public static void agentmain(String agentArgs, Instrumentation inst) {
+        start(agentArgs, inst);
+    }
+
+    private static void start(String agentArgs, Instrumentation inst) {
+        if (!STARTED.compareAndSet(false, true)) {
+            return;
+        }
         System.out.println("======================================");
         System.out.println(" Virtual Deadlock Detection Agent");
         System.out.println(" Agent Started Successfully");

@@ -19,7 +19,7 @@ public class CliConfig {
     @Bean
     public PromptProvider myPromptProvider() {
         return () -> new AttributedString(
-                "vdd:> ",
+            "dixy> ",
                 AttributedStyle.DEFAULT.foreground(AttributedStyle.CYAN).bold()
         );
     }
