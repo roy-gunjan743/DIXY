@@ -20,7 +20,11 @@ $javaCommand = Get-Command java.exe -ErrorAction SilentlyContinue
 if (-not $javaCommand) {
 	throw 'DIXY requires Java 21 or newer. Install Temurin 21 from https://adoptium.net/ and open a new PowerShell.'
 }
-$javaVersion = (& $javaCommand.Source -version 2>&1 | Out-String)
+$javaVersionFile = [IO.Path]::GetTempFileName()
+$javaProcess = Start-Process -FilePath $javaCommand.Source -ArgumentList '-version' -RedirectStandardError $javaVersionFile -NoNewWindow -Wait -PassThru
+$javaVersion = Get-Content $javaVersionFile -Raw
+Remove-Item $javaVersionFile -Force -ErrorAction SilentlyContinue
+if ($javaProcess.ExitCode -ne 0) { throw 'DIXY found Java but could not execute it.' }
 if ($javaVersion -notmatch 'version "(?<major>\d+)') { throw 'DIXY found Java but could not read its version.' }
 if ([int]$Matches.major -lt 21) { throw "DIXY requires Java 21 or newer; found Java $($Matches.major)." }
 
