@@ -149,8 +149,22 @@ the install directory. Pin a release with `install.sh --version 1.0.0` or
 `install.ps1 -Uninstall`.
 
 Open a new terminal after installation, then run `dixy` from any directory.
-`dixy detect --pid <pid>`, `dixy detect --jar app.jar`, and `dixy detect --json`
-stream live telemetry and return exit code 1 when a deadlock cycle is found.
+Running `dixy` with no arguments opens the interactive shell. `help` lists all
+commands and tab completion is available at the `dixy>` prompt.
+
+For noninteractive live scanning, use `dixy detect`. It supports
+`--pid <pid>` to attach to an existing JVM, `--jar <path>` to launch a jar
+with the agent, and `--json` for machine-readable snapshots:
+
+```powershell
+dixy detect --pid 12345
+dixy detect --jar C:\path\to\app.jar --json
+```
+
+The command prints live thread, lock, wait-edge, and cycle data once per
+second. It returns exit code `0` when stopped without a cycle, `1` when a
+deadlock is found, and `2` when startup or detection fails. Press `Ctrl+C` to
+stop a scan cleanly.
 
 To monitor a local application directory, pass its root to `dixy`. DIXY scans
 that directory for runnable jars, asks you to choose when there is more than
@@ -385,7 +399,7 @@ The console stays quiet; technical logs are written to `logs/vdd.log` in the dir
 
 DIXY includes an interactive command-line interface. PostgreSQL and Redis must be running (see [Getting Started](#-getting-started)).
 
-Start it:
+Start the shell directly:
 
 ```bash
 java -Duser.timezone=UTC -Dspring.profiles.active=cli \
@@ -401,6 +415,7 @@ dixy> locks list
 dixy> events list
 dixy> deadlocks detect
 dixy> deadlocks list
+dixy> detect
 ```
 
 | Command | What it does |
@@ -410,6 +425,7 @@ dixy> deadlocks list
 | `locks list` · `locks get` · `locks delete` | List locks, get one by lock-id, delete one by database ID |
 | `events list` | Recent raw JVMTI events (LockOwned / LockReleased) |
 | `deadlocks detect` | Run live detection on the current wait-for graph |
+| `detect` | Continuously scan live telemetry; supports `--pid`, `--jar`, and `--json` |
 | `deadlocks list` | List the latest stored deadlock reports |
 | `deadlocks clear` | Clear all stored DIXY telemetry data |
 
@@ -521,19 +537,43 @@ curl -H "X-API-Key: dixy-local-dev-key-123" http://localhost:8081/api/deadlocks
 
 > The agent needs the bundled native library, which exists for Linux x86-64 and Windows x86-64 only.
 
-### Launcher scripts (`dixy.sh` / `dixy.bat`)
+### Target launcher workflow
 
-These scripts start a target jar with the agent attached and then open the DIXY CLI. They use `dixy-agent.jar` and `dixy-cli.jar` placed next to the script:
+The launchers resolve their own installation directory and do not depend on
+the current working directory. Pass either a target root directory or one jar.
+The launcher finds runnable jars, prompts for a choice when there is more than
+one, starts the selected target with the agent, and then opens the shell:
 
 ```bash
-./dixy.sh path/to/your-app.jar
+dixy /path/to/your-app-directory
 ```
 
 ```powershell
-.\dixy.bat path\to\your-app.jar
+dixy C:\path\to\your-app-directory
 ```
 
-> The scripts attach the agent **without** `serverUrl` / `apiKey`, so the agent falls back to `http://localhost:8080` with no key. To report to a web-mode backend, use the explicit `-javaagent` command above. The CLI the scripts open needs PostgreSQL running.
+Then start live scanning inside the shell:
+
+```text
+dixy> detect
+```
+
+The launcher passes the local backend URL and API key to the agent, so the
+selected target's real telemetry is written to the DIXY database and read by
+the live scanner. PostgreSQL and Redis must be running; the default Docker
+ports are PostgreSQL `5434` and Redis `6379`.
+
+The equivalent direct commands are:
+
+```bash
+dixy detect --pid 12345
+dixy detect --jar /path/to/your-app.jar
+dixy detect --jar /path/to/your-app.jar --json
+```
+
+When a cycle is found, DIXY prints an alert such as `thread A holds lock X;
+thread B waits for it`, followed by the remaining cycle edges. The JSON mode
+emits a `cycles` array containing the cycle edges.
 
 The `dixy-*.jar` files committed in the repository root can lag behind the source. Refresh them from source with:
 
