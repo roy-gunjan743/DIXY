@@ -33,4 +33,5 @@ if [[ $# -gt 0 && "${1:-}" != "detect" && "${1:-}" != "--version" && "${1:-}" !=
 	echo "[dixy] Target started. Use 'detect' in the dixy shell for live scanning."
 	shift
 fi
-exec "$JAVA_BIN" -Dspring.profiles.active=cli -Dspring.shell.interactive.enabled="$SHELL_INTERACTIVE" -Ddixy.agent.path="$AGENT_JAR" -Ddixy.noninteractive="$NON_INTERACTIVE" -jar "$CLI_JAR" "$@"
+ACTIVE_PROFILE=cli; [[ "${1:-}" == "detect" ]] && ACTIVE_PROFILE=web
+exec "$JAVA_BIN" -Dspring.profiles.active="$ACTIVE_PROFILE" -Dspring.shell.interactive.enabled="$SHELL_INTERACTIVE" -Ddixy.agent.path="$AGENT_JAR" -Ddixy.noninteractive="$NON_INTERACTIVE" -jar "$CLI_JAR" "$@"

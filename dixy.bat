@@ -26,7 +26,9 @@ if errorlevel 1 goto launcher_error
 shift
 
 :launch_cli
-"%JAVA_BIN%" -Dspring.profiles.active=cli -Dspring.shell.interactive.enabled=%SHELL_INTERACTIVE% -Ddixy.agent.path="%AGENT_JAR%" -Ddixy.noninteractive=%NON_INTERACTIVE% -jar "%CLI_JAR%" %*
+set "ACTIVE_PROFILE=cli"
+if /i "%~1"=="detect" set "ACTIVE_PROFILE=web"
+"%JAVA_BIN%" -Dspring.profiles.active=%ACTIVE_PROFILE% -Dspring.shell.interactive.enabled=%SHELL_INTERACTIVE% -Ddixy.agent.path="%AGENT_JAR%" -Ddixy.noninteractive=%NON_INTERACTIVE% -jar "%CLI_JAR%" %*
 exit /b %ERRORLEVEL%
 
 :launcher_error
