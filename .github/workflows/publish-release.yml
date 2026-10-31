@@ -46,6 +46,8 @@ jobs:
           cp build/libs/*.jar release-staging/dixy-cli.jar
           if [ -f dixy.sh ]; then cp dixy.sh release-staging/dixy.sh; chmod +x release-staging/dixy.sh; fi
           if [ -f dixy.bat ]; then cp dixy.bat release-staging/dixy.bat; fi
+          if [ -f install.ps1 ]; then cp install.ps1 release-staging/install.ps1; fi
+          if [ -f install.sh ]; then cp install.sh release-staging/install.sh; fi
           (cd release-staging && sha256sum dixy-cli.jar dixy-agent.jar > SHA256SUMS)
 
       - name: Verify release artifacts
@@ -80,6 +82,8 @@ jobs:
             release-staging/dixy-cli.jar
             release-staging/dixy.sh
             release-staging/dixy.bat
+            release-staging/install.ps1
+            release-staging/install.sh
 
       - name: Publish to public DIXY-CLI repo (if configured)
         env:
@@ -96,6 +100,8 @@ jobs:
             release-staging/dixy-cli.jar
             release-staging/dixy.sh
             release-staging/dixy.bat
+            release-staging/install.ps1
+            release-staging/install.sh
             release-staging/VERSION
             release-staging/SHA256SUMS
             release-staging/VERSION

@@ -111,7 +111,7 @@ public class DetectApplicationRunner implements ApplicationRunner {
     }
 
     private String agentArguments(String appName) {
-        return "serverUrl=http://localhost:8081,apiKey="
+        return "serverUrl=" + System.getProperty("dixy.server.url", "http://localhost:8081") + ",apiKey="
                 + System.getProperty("security.api-key", "dixy-local-dev-key-123")
                 + ",appName=" + appName;
     }

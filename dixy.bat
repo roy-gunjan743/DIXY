@@ -14,6 +14,8 @@ if not exist "%JAVA_BIN%" set "JAVA_BIN=java.exe"
 if errorlevel 1 (echo DIXY requires Java 21 or newer. Install Temurin 21 from https://adoptium.net/ and retry. 1>&2 & exit /b 1)
 set "NON_INTERACTIVE=false"
 set "SHELL_INTERACTIVE=true"
+for /f "delims=" %%P in ('powershell.exe -NoProfile -Command "$p=8081; do {$c=[Net.Sockets.TcpClient]::new(); try {$c.Connect('127.0.0.1',$p); $busy=$true} catch {$busy=$false}; $c.Dispose(); if($busy){$p++}} while($busy); $p"') do set "DIXY_PORT=%%P"
+if not defined DIXY_PORT set "DIXY_PORT=8081"
 if /i "%~1"=="detect" set "NON_INTERACTIVE=true"
 if /i "%~1"=="detect" set "SHELL_INTERACTIVE=false"
 if "%~1"=="" goto launch_cli
@@ -28,7 +30,7 @@ shift
 :launch_cli
 set "ACTIVE_PROFILE=cli"
 if /i "%~1"=="detect" set "ACTIVE_PROFILE=web"
-"%JAVA_BIN%" -Dspring.profiles.active=%ACTIVE_PROFILE% -Dspring.shell.interactive.enabled=%SHELL_INTERACTIVE% -Ddixy.agent.path="%AGENT_JAR%" -Ddixy.noninteractive=%NON_INTERACTIVE% -jar "%CLI_JAR%" %*
+"%JAVA_BIN%" -Dserver.port=%DIXY_PORT% -Ddixy.server.url=http://localhost:%DIXY_PORT% -Dspring.profiles.active=%ACTIVE_PROFILE% -Dspring.shell.interactive.enabled=%SHELL_INTERACTIVE% -Ddixy.agent.path="%AGENT_JAR%" -Ddixy.noninteractive=%NON_INTERACTIVE% -jar "%CLI_JAR%" %*
 exit /b %ERRORLEVEL%
 
 :launcher_error
@@ -66,7 +68,7 @@ if not defined TARGET_JAR (
 
 :launch_target
 echo [dixy] Starting target: %TARGET_JAR%
-start "DIXY target" /b "%JAVA_BIN%" -javaagent:"%AGENT_JAR%"=serverUrl=http://localhost:8081,apiKey=dixy-local-dev-key-123,appName=dixy-target -jar "%TARGET_JAR%"
+start "DIXY target" /b "%JAVA_BIN%" -javaagent:"%AGENT_JAR%"=serverUrl=http://localhost:%DIXY_PORT%,apiKey=dixy-local-dev-key-123,appName=dixy-target -jar "%TARGET_JAR%"
 echo [dixy] Target started. Use 'detect' in the dixy shell for live scanning.
 exit /b 0
 
