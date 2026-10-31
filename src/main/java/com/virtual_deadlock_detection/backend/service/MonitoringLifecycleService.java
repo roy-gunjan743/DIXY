@@ -32,4 +32,24 @@ public class MonitoringLifecycleService {
                 "ON CONFLICT (instance_pk) WHERE ended_at IS NULL DO NOTHING",
                 instancePk, instancePk);
     }
+    @Transactional
+    public void endSession(String instanceId) {
+        if (instanceId == null || instanceId.isBlank()) {
+            return;
+        }
+
+        jdbcTemplate.update(
+            """
+            UPDATE monitoring_sessions
+            SET ended_at = CURRENT_TIMESTAMP
+            WHERE instance_pk = (
+                SELECT instance_pk
+                FROM monitoring_instances
+                WHERE instance_id = ?
+            )
+            AND ended_at IS NULL
+            """,
+            instanceId
+        );
+    }
 }

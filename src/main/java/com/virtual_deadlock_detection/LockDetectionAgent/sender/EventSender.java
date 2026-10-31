@@ -1,3 +1,4 @@
+
 package com.virtual_deadlock_detection.LockDetectionAgent.sender;
 
 import com.virtual_deadlock_detection.LockDetectionAgent.dto.EventDTO;
@@ -13,22 +14,6 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 
-/**
- * Sends JVMTI/JFR events through the agent pipeline.
- *
- * Every event has two destinations:
- *
- * 1. Local GraphGateway
- *    - keeps the target JVM's in-memory WaitForGraph updated
- *    - allows immediate deadlock detection
- *
- * 2. DIXY backend
- *    - persists target JVM telemetry
- *    - makes threads / locks / events available to the CLI
- *
- * The HTTP operation is fire-and-forget.
- * A backend/network failure must never break the instrumented JVM.
- */
 public class EventSender {
 
     private static final Logger log =
@@ -50,15 +35,10 @@ public class EventSender {
             Duration.ofSeconds(5);
 
     private final HttpClient httpClient;
-
     private final String telemetryEndpoint;
-
     private final String apiKey;
-
     private final String appName;
-
     private final String instanceId;
-
     private final GraphGateway graphGateway;
 
     public EventSender() {
@@ -67,22 +47,8 @@ public class EventSender {
                 .connectTimeout(CONNECT_TIMEOUT)
                 .build();
 
-        this.graphGateway = new GraphGateway(
-                RuntimeContext.GRAPH
-        );
+        this.graphGateway = new GraphGateway(RuntimeContext.GRAPH);
 
-        /*
-         * Read the same agent configuration that is used by
-         * RemoteReportSink.
-         *
-         * The current project launches the agent with:
-         *
-         * serverUrl=http://localhost:8081
-         * apiKey=dixy-local-dev-key-123
-         * appName=deadlock-lab
-         *
-         * RuntimeContext values are used when available.
-         */
         String serverUrl = RuntimeContext.getServerUrl();
 
         if (serverUrl == null || serverUrl.isBlank()) {
@@ -91,40 +57,28 @@ public class EventSender {
 
         serverUrl = removeTrailingSlash(serverUrl);
 
-        this.telemetryEndpoint =
-                serverUrl + "/api/telemetry";
+        this.telemetryEndpoint = serverUrl + "/api/telemetry";
 
-        String configuredApiKey =
-                RuntimeContext.getApiKey();
+        String configuredApiKey = RuntimeContext.getApiKey();
 
         this.apiKey =
-                configuredApiKey == null ||
-                        configuredApiKey.isBlank()
+                configuredApiKey == null || configuredApiKey.isBlank()
                         ? DEFAULT_API_KEY
                         : configuredApiKey;
 
-        String configuredAppName =
-                RuntimeContext.getAppName();
+        String configuredAppName = RuntimeContext.getAppName();
 
         this.appName =
-                configuredAppName == null ||
-                        configuredAppName.isBlank()
+                configuredAppName == null || configuredAppName.isBlank()
                         ? DEFAULT_APP_NAME
                         : configuredAppName;
 
         this.instanceId =
                 "pid-" + ProcessHandle.current().pid();
 
-        log.info(
-                "EventSender initialized. Telemetry endpoint: {}",
-                telemetryEndpoint
-        );
-
-        log.info(
-                "EventSender appName: {}, instanceId: {}",
-                appName,
-                instanceId
-        );
+        log.info("EventSender initialized. Endpoint: {}", telemetryEndpoint);
+        log.info("EventSender appName: {}, instanceId: {}",
+                appName, instanceId);
     }
 
     /**
@@ -136,24 +90,9 @@ public class EventSender {
             return;
         }
 
-        /*
-         * FIRST:
-         *
-         * Keep the existing local graph functionality.
-         *
-         * This is required because the target JVM performs
-         * real-time deadlock detection locally.
-         */
         try {
-
             graphGateway.processEvent(eventDTO);
-
         } catch (RuntimeException e) {
-
-            /*
-             * Never allow graph processing to break JVMTI
-             * event collection.
-             */
             log.warn(
                     "Local graph processing failed for event {}: {}",
                     eventDTO.getEventType(),
@@ -161,16 +100,11 @@ public class EventSender {
             );
         }
 
-        /*
-         * SECOND:
-         *
-         * Persist the same event remotely in DIXY.
-         */
         sendToDixy(eventDTO);
     }
 
     /**
-     * Sends one telemetry event to DIXY.
+     * Sends ordinary telemetry asynchronously.
      */
     private void sendToDixy(EventDTO event) {
 
@@ -182,109 +116,134 @@ public class EventSender {
                     HttpRequest.newBuilder()
                             .uri(URI.create(telemetryEndpoint))
                             .timeout(REQUEST_TIMEOUT)
-                            .header(
-                                    "Content-Type",
-                                    "application/json"
-                            );
+                            .header("Content-Type", "application/json");
 
             if (apiKey != null && !apiKey.isBlank()) {
-
-                requestBuilder.header(
-                        "X-API-Key",
-                        apiKey
-                );
+                requestBuilder.header("X-API-Key", apiKey);
             }
 
-            HttpRequest request =
-                    requestBuilder
-                            .POST(
-                                    HttpRequest.BodyPublishers
-                                            .ofString(json)
-                            )
-                            .build();
+            HttpRequest request = requestBuilder
+                    .POST(HttpRequest.BodyPublishers.ofString(json))
+                    .build();
 
-            httpClient
-                    .sendAsync(
-                            request,
-                            HttpResponse.BodyHandlers.ofString()
-                    )
-                    .thenAccept(response -> {
+            httpClient.sendAsync(
+                    request,
+                    HttpResponse.BodyHandlers.ofString()
+            ).thenAccept(response -> {
 
-                        int status =
-                                response.statusCode();
+                int status = response.statusCode();
 
-                        if (status < 200 || status >= 300) {
+                if (status < 200 || status >= 300) {
+                    log.warn(
+                            "DIXY rejected telemetry. HTTP {} response={}",
+                            status,
+                            response.body()
+                    );
+                    return;
+                }
 
-                            log.warn(
-                                    "DIXY telemetry rejected event. HTTP {} endpoint={} response={}",
-                                    status,
-                                    telemetryEndpoint,
-                                    response.body()
-                            );
+                log.debug(
+                        "DIXY telemetry accepted: {} thread={} id={}",
+                        event.getEventType(),
+                        event.getThreadName(),
+                        event.getThreadId()
+                );
 
-                            return;
-                        }
+            }).exceptionally(error -> {
 
-                        log.debug(
-                                "DIXY telemetry accepted: {} thread={} id={}",
-                                event.getEventType(),
-                                event.getThreadName(),
-                                event.getThreadId()
-                        );
-                    })
-                    .exceptionally(error -> {
+                log.warn(
+                        "Unable to send telemetry to DIXY: {}",
+                        error.getMessage()
+                );
 
-                        /*
-                         * IMPORTANT:
-                         *
-                         * Network failure must never affect
-                         * the target application.
-                         */
-                        log.warn(
-                                "Unable to send telemetry to DIXY: {}",
-                                error.getMessage()
-                        );
-
-                        return null;
-                    });
+                return null;
+            });
 
         } catch (Exception e) {
 
-            /*
-             * Invalid URI / serialization / request construction
-             * must also never break the target JVM.
-             */
             log.warn(
-                    "Failed to construct DIXY telemetry request: {}",
+                    "Failed to construct telemetry request: {}",
                     e.getMessage()
             );
         }
     }
 
     /**
-     * Creates the JSON expected by TelemetryRequest.
+     * Sends the final monitoring shutdown event synchronously.
      *
-     * We intentionally build this without Jackson because the
-     * standalone javaagent runtime is kept dependency-light.
+     * This event does not contain threadId because it represents
+     * the monitoring instance rather than an individual thread.
+     */
+    public void sendMonitorStop() {
+
+        String json = "{"
+                + "\"appName\":\"" + escape(appName) + "\","
+                + "\"instanceId\":\"" + escape(instanceId) + "\","
+                + "\"eventType\":\"MONITOR_STOP\""
+                + "}";
+
+        try {
+
+            HttpRequest.Builder requestBuilder =
+                    HttpRequest.newBuilder()
+                            .uri(URI.create(telemetryEndpoint))
+                            .timeout(REQUEST_TIMEOUT)
+                            .header("Content-Type", "application/json");
+
+            if (apiKey != null && !apiKey.isBlank()) {
+                requestBuilder.header("X-API-Key", apiKey);
+            }
+
+            HttpRequest request = requestBuilder
+                    .POST(HttpRequest.BodyPublishers.ofString(json))
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(
+                    request,
+                    HttpResponse.BodyHandlers.ofString()
+            );
+
+            int status = response.statusCode();
+
+            if (status >= 200 && status < 300) {
+                log.info(
+                        "DIXY monitoring session stopped successfully: {}",
+                        instanceId
+                );
+            } else {
+                log.warn(
+                        "MONITOR_STOP rejected. HTTP {} response={}",
+                        status,
+                        response.body()
+                );
+            }
+
+        } catch (InterruptedException e) {
+
+            Thread.currentThread().interrupt();
+
+            log.warn("MONITOR_STOP interrupted: {}", e.getMessage());
+
+        } catch (Exception e) {
+
+            log.warn(
+                    "MONITOR_STOP delivery failed: {}",
+                    e.getMessage()
+            );
+        }
+    }
+
+    /**
+     * Creates JSON expected by TelemetryRequest.
      */
     private String toJson(EventDTO event) {
 
-        StringBuilder json =
-                new StringBuilder(512);
+        StringBuilder json = new StringBuilder(512);
 
         json.append("{");
 
-        appendString(
-                json,
-                "appName",
-                appName
-        );
-
-        appendString(
-                json,
-                "instanceId",
-                instanceId
-        );
+        appendString(json, "appName", appName);
+        appendString(json, "instanceId", instanceId);
 
         appendString(
                 json,
@@ -294,23 +253,10 @@ public class EventSender {
                         : event.getEventType().name()
         );
 
-        appendLong(
-                json,
-                "threadId",
-                event.getThreadId()
-        );
+        appendLong(json, "threadId", event.getThreadId());
+        appendString(json, "threadName", event.getThreadName());
 
-        appendString(
-                json,
-                "threadName",
-                event.getThreadName()
-        );
-
-        appendLong(
-                json,
-                "ownerThreadId",
-                event.getOwnerThreadId()
-        );
+        appendLong(json, "ownerThreadId", event.getOwnerThreadId());
 
         appendString(
                 json,
@@ -324,11 +270,7 @@ public class EventSender {
                 String.valueOf(event.getLockAddress())
         );
 
-        appendString(
-                json,
-                "lockType",
-                "MONITOR"
-        );
+        appendString(json, "lockType", "MONITOR");
 
         appendString(
                 json,
@@ -361,11 +303,8 @@ public class EventSender {
                 .append("\":");
 
         if (value == null) {
-
             json.append("null");
-
         } else {
-
             json.append("\"")
                     .append(escape(value))
                     .append("\"");
@@ -385,8 +324,7 @@ public class EventSender {
                 .append(value);
     }
 
-    private void appendCommaIfNeeded(
-            StringBuilder json) {
+    private void appendCommaIfNeeded(StringBuilder json) {
 
         if (json.length() > 1) {
             json.append(",");
@@ -407,16 +345,12 @@ public class EventSender {
                 .replace("\t", "\\t");
     }
 
-    private String removeTrailingSlash(
-            String value) {
+    private String removeTrailingSlash(String value) {
 
         String result = value;
 
         while (result.endsWith("/")) {
-            result = result.substring(
-                    0,
-                    result.length() - 1
-            );
+            result = result.substring(0, result.length() - 1);
         }
 
         return result;

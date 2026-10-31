@@ -38,15 +38,35 @@ public class TelemetryService {
             );
         }
 
+        String eventType = request.getEventType() == null
+                ? ""
+                : request.getEventType().trim().toUpperCase();
+
+        String instanceId = request.getInstanceId() != null
+                && !request.getInstanceId().isBlank()
+                ? request.getInstanceId()
+                : "unknown";
+
+        // Handle monitoring shutdown without requiring a thread ID.
+        if ("MONITOR_STOP".equals(eventType)) {
+            monitoringLifecycleService.endSession(instanceId);
+
+            return new TelemetryResponse(
+                    true,
+                    "Monitoring session ended successfully"
+            );
+        }
+
         if (request.getThreadId() == null) {
             throw new IllegalArgumentException(
                     "Telemetry request requires threadId"
             );
         }
 
-        String eventType = request.getEventType() == null
-                ? ""
-                : request.getEventType().trim().toUpperCase();
+        monitoringLifecycleService.recordTelemetry(
+                instanceId,
+                request.getAppName()
+        );
 
         /*
          * ---------------------------------------------------------
@@ -54,12 +74,6 @@ public class TelemetryService {
          * ---------------------------------------------------------
          */
 
-        String instanceId = request.getInstanceId() != null
-                && !request.getInstanceId().isBlank()
-                ? request.getInstanceId()
-                : "unknown";
-
-        monitoringLifecycleService.recordTelemetry(instanceId, request.getAppName());
 
         ThreadEntity thread = new ThreadEntity();
 
