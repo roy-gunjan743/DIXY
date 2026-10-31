@@ -30,7 +30,9 @@ shift
 :launch_cli
 set "ACTIVE_PROFILE=cli"
 if /i "%~1"=="detect" set "ACTIVE_PROFILE=web"
-"%JAVA_BIN%" -Dserver.port=%DIXY_PORT% -Ddixy.server.url=http://localhost:%DIXY_PORT% -Dspring.profiles.active=%ACTIVE_PROFILE% -Dspring.shell.interactive.enabled=%SHELL_INTERACTIVE% -Ddixy.agent.path="%AGENT_JAR%" -Ddixy.noninteractive=%NON_INTERACTIVE% -jar "%CLI_JAR%" %*
+echo [dixy] Starting CLI backend on port %DIXY_PORT%...
+"%JAVA_BIN%" -Dserver.port=%DIXY_PORT% -Ddixy.server.url=http://localhost:%DIXY_PORT% -Dlogging.console.enabled=true -Dlogging.file.name= -Dspring.profiles.active=%ACTIVE_PROFILE% -Dspring.shell.interactive.enabled=%SHELL_INTERACTIVE% -Ddixy.agent.path="%AGENT_JAR%" -Ddixy.noninteractive=%NON_INTERACTIVE% -jar "%CLI_JAR%" %*
+if errorlevel 1 echo [dixy] Startup failed. Detailed logs: %SCRIPT_DIR%logs\vdd.log 1>&2
 exit /b %ERRORLEVEL%
 
 :launcher_error

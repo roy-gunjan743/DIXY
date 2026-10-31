@@ -35,4 +35,5 @@ if [[ $# -gt 0 && "${1:-}" != "detect" && "${1:-}" != "--version" && "${1:-}" !=
 	shift
 fi
 ACTIVE_PROFILE=cli; [[ "${1:-}" == "detect" ]] && ACTIVE_PROFILE=web
-exec "$JAVA_BIN" -Dserver.port="$DIXY_PORT" -Ddixy.server.url="http://localhost:$DIXY_PORT" -Dspring.profiles.active="$ACTIVE_PROFILE" -Dspring.shell.interactive.enabled="$SHELL_INTERACTIVE" -Ddixy.agent.path="$AGENT_JAR" -Ddixy.noninteractive="$NON_INTERACTIVE" -jar "$CLI_JAR" "$@"
+echo "[dixy] Starting CLI backend on port $DIXY_PORT..."
+exec "$JAVA_BIN" -Dserver.port="$DIXY_PORT" -Ddixy.server.url="http://localhost:$DIXY_PORT" -Dlogging.console.enabled=true -Dlogging.file.name= -Dspring.profiles.active="$ACTIVE_PROFILE" -Dspring.shell.interactive.enabled="$SHELL_INTERACTIVE" -Ddixy.agent.path="$AGENT_JAR" -Ddixy.noninteractive="$NON_INTERACTIVE" -jar "$CLI_JAR" "$@"
