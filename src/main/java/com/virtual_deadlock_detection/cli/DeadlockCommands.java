@@ -74,7 +74,7 @@ public class DeadlockCommands {
 
         @Command(
                         name = { "jars", "list" },
-                        description = "List runnable jar files in a directory",
+                            description = "List all jar files in a directory",
                         group = GROUP
         )
         public void jarsList(
@@ -96,7 +96,6 @@ public class DeadlockCommands {
                                 jars = entries
                                                 .filter(Files::isRegularFile)
                                                 .filter(file -> file.getFileName().toString().toLowerCase().endsWith(".jar"))
-                                                .filter(file -> !isDixyArtifact(file.getFileName().toString()))
                                                 .sorted(Comparator.comparing(file -> file.getFileName().toString().toLowerCase()))
                                                 .collect(Collectors.toList());
                         }
@@ -122,13 +121,6 @@ public class DeadlockCommands {
                         out.println(RED + BOLD + "  Unable to scan jars: " + exception.getMessage() + RESET);
                         out.flush();
                 }
-        }
-
-        private boolean isDixyArtifact(String name) {
-                String lowerName = name.toLowerCase();
-                return lowerName.equals("dixy-agent.jar")
-                                || lowerName.equals("dixy-cli.jar")
-                                || lowerName.endsWith("-plain.jar");
         }
 
     public DeadlockCommands(
