@@ -23,10 +23,12 @@ runs, through the real production pipeline (JVMTI bridge → JFR → `EventColle
    holding a monitor (`pinMonitor`) long enough to pin its carrier.
 
 `DeadlockDetector.detect()` finds the deadlock cycle from graph structure
-(DFS back-edge detection), and separately `correlatePinning()` attaches any
-sufficiently-aged `PINS` edge anywhere in the graph to that cycle by time,
-not by structural graph position. The test asserts both: a cycle was found,
-and `DeadlockCycle.hasPinningCorrelation()` is true for it.
+(DFS back-edge detection), and separately `correlatePinning()` may attach a
+sufficiently-aged `PINS` edge observed after the cycle formed, even when the
+edge is on unrelated graph nodes. The test asserts both: a cycle was found,
+and `DeadlockCycle.hasPinningCorrelation()` is true for it. The focused
+`PinningCorrelationTest` also verifies that an older, unrelated pin is not
+attached to a later cycle.
 
 Sample detector output from a passing run:
 
@@ -58,12 +60,20 @@ All four test classes passed in both environments:
 
 ## Design note: why the pinned thread isn't structurally in the cycle
 
-`correlatePinning()` deliberately correlates by **time**, not by requiring the
-pinned thread to sit inside the deadlock's own wait-for edges. This isn't a
-simplification — it's necessary, because of two independent JDK observability
-gaps discovered during this verification pass. Both are worth citing directly
-in the Phase 2 invention disclosure as justification for why the native JVMTI
-bridge component is necessary rather than incidental.
+`correlatePinning()` deliberately allows **global correlation by observation
+time**, not just graph position. Requiring a shared thread node would discard
+useful evidence because of JDK 21's thread-identity observability limits. The
+observation-time gate rejects PINS edges already present before the cycle was
+formed, which prevents old, unrelated pins from being inherited by new
+deadlocks.
+
+This remains a heuristic, not proof of causal involvement or exact physical
+overlap. JFR commits `jdk.VirtualThreadPinned` when the event ends, while the
+graph records when its listener processes the event. Delivery delays can make
+that observed ordering differ from the actual pin interval. JDK 21 also does
+not expose a reliable carrier identity on this event that can be joined to
+`ThreadMXBean` IDs. A lower-level carrier-tracking bridge and event-time
+metadata would be needed to establish exact overlap and attribution.
 
 ### Gap 1: Carrier-thread misattribution
 

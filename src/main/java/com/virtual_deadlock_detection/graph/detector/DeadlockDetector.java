@@ -6,6 +6,7 @@ import com.virtual_deadlock_detection.graph.model.EdgeType;
 import com.virtual_deadlock_detection.graph.model.GraphEdge;
 import com.virtual_deadlock_detection.graph.model.GraphNode;
 
+import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -98,8 +99,7 @@ public class DeadlockDetector {
     }
 
     /**
-     * NEW — the unified-detection step, correlated globally by time rather
-     * than by graph position.
+     * Correlates globally by observation time rather than graph position.
      *
      * Ideally this would only look at PINS edges sourced from nodes IN this
      * cycle. However, ThreadMXBean (which ThreadStatePoller relies on to
@@ -113,16 +113,25 @@ public class DeadlockDetector {
      * identities for what is, physically, the same thread of execution.
      *
      * Until that's resolved with a lower-level (JVMTI) carrier-tracking
-     * bridge, correlate any PINS edge old enough to be a real, settled pin
-     * — anywhere in the graph — with any cycle detected while it's active.
+     * bridge, a PINS edge observed while a cycle is already present can
+     * correlate with that cycle regardless of graph position. JFR commits
+     * VirtualThreadPinned events when the pin ends, so this preserves pins
+     * that overlapped the cycle while rejecting older, unrelated evidence.
+     * This is based on observation order; delayed event delivery can still
+     * make the observed order differ from the physical event timeline.
      */
     private DeadlockCycle correlatePinning(DeadlockCycle cycle, WaitForGraph graph) {
+        Instant cycleFormedAt = cycle.getEdgesInCycle().stream()
+                .map(GraphEdge::getSince)
+                .max(Instant::compareTo)
+                .orElse(Instant.MAX);
 
         List<GraphEdge> correlatedPins = new ArrayList<>();
         for (GraphNode node : graph.getNodes()) {
             Set<GraphEdge> outgoing = graph.getEdges().getOrDefault(node, Collections.emptySet());
             for (GraphEdge edge : outgoing) {
                 if (edge.getType() == EdgeType.PINS
+                        && !edge.getSince().isBefore(cycleFormedAt)
                         && edge.ageMicros() >= PINNING_CORRELATION_THRESHOLD_MICROS) {
                     correlatedPins.add(edge);
                 }
