@@ -40,11 +40,11 @@ try {
 	}
 	$checksums = Get-Content (Join-Path $tempDir 'SHA256SUMS')
 	foreach ($asset in @('dixy-agent.jar', 'dixy-cli.jar')) {
-		$line = $checksums | Where-Object { $_ -match "  $([regex]::Escape($asset))$" } | Select-Object -First 1
+		$line = $checksums | Where-Object { $_ -match "^(?<hash>[0-9a-fA-F]{64})\s+\*?$([regex]::Escape($asset))$" } | Select-Object -First 1
 		if (-not $line) { throw "SHA-256 entry missing for $asset" }
-		$expected = ($line -split '\s+')[0].ToLowerInvariant()
+		$expected = ([regex]::Match($line, '^[0-9a-fA-F]{64}')).Value.ToLowerInvariant()
 		$actual = (Get-FileHash (Join-Path $tempDir $asset) -Algorithm SHA256).Hash.ToLowerInvariant()
-		if ($actual -ne $expected) { throw "SHA-256 verification failed for $asset" }
+		if ($actual -ne $expected) { throw "SHA-256 verification failed for $asset. Expected $expected, got $actual." }
 	}
 	Copy-Item (Join-Path $tempDir 'dixy-agent.jar'), (Join-Path $tempDir 'dixy-cli.jar'), (Join-Path $tempDir 'VERSION'), (Join-Path $tempDir 'dixy.bat') $InstallDir -Force
 
