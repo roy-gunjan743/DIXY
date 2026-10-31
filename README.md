@@ -410,6 +410,8 @@ You will get a `dixy>` prompt:
 
 ```text
 dixy> status
+dixy> jars list
+dixy> jars list --path C:\Apps\my-application
 dixy> threads list
 dixy> locks list
 dixy> events list
@@ -421,6 +423,7 @@ dixy> detect
 | Command | What it does |
 |---|---|
 | `status` | Full diagnostic status (HEALTHY / WARNING / CRITICAL) |
+| `jars list [--path <dir>]` | List runnable jars in a directory without launching them |
 | `threads list` · `threads get` · `threads delete` | List threads, get one by JVM thread id, delete one by database ID |
 | `locks list` · `locks get` · `locks delete` | List locks, get one by lock-id, delete one by database ID |
 | `events list` | Recent raw JVMTI events (LockOwned / LockReleased) |

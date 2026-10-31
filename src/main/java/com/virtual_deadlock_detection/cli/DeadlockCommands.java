@@ -24,9 +24,13 @@ import org.springframework.shell.core.command.annotation.Option;
 import org.springframework.stereotype.Component;
 
 import java.io.PrintWriter;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Collectors;
 import java.util.concurrent.TimeUnit;
 import com.sun.tools.attach.VirtualMachine;
 
@@ -67,6 +71,65 @@ public class DeadlockCommands {
     private final ThreadService threadService;
     private final LockService lockService;
     private final WaitEdgeService waitEdgeService;
+
+        @Command(
+                        name = { "jars", "list" },
+                        description = "List runnable jar files in a directory",
+                        group = GROUP
+        )
+        public void jarsList(
+                        CommandContext ctx,
+                        @Option(shortName = 'p', longName = "path", description = "Directory to scan (default: current directory)") String path) {
+
+                PrintWriter out = ctx.outputWriter();
+                Path directory = Path.of(path == null || path.isBlank() ? "." : path).toAbsolutePath().normalize();
+
+                if (!Files.isDirectory(directory)) {
+                        out.println(RED + BOLD + "  Target directory does not exist: " + directory + RESET);
+                        out.flush();
+                        return;
+                }
+
+                try {
+                        List<Path> jars;
+                        try (var entries = Files.list(directory)) {
+                                jars = entries
+                                                .filter(Files::isRegularFile)
+                                                .filter(file -> file.getFileName().toString().toLowerCase().endsWith(".jar"))
+                                                .filter(file -> !isDixyArtifact(file.getFileName().toString()))
+                                                .sorted(Comparator.comparing(file -> file.getFileName().toString().toLowerCase()))
+                                                .collect(Collectors.toList());
+                        }
+
+                        if (jars.isEmpty()) {
+                                out.println(YELLOW + "  No runnable jars found in " + directory + RESET);
+                                out.flush();
+                                return;
+                        }
+
+                        out.println(CYAN + BOLD + "  Runnable jars in " + directory + RESET);
+                        out.println(CYAN + "  " + "-".repeat(86) + RESET);
+                        for (int index = 0; index < jars.size(); index++) {
+                                Path jar = jars.get(index);
+                                long sizeKb = Files.size(jar) / 1024;
+                                out.printf("  %d) %-42s %8d KB  %s%n", index + 1,
+                                                jar.getFileName(), sizeKb, jar);
+                        }
+                        out.println(WHITE + "\n  Total: " + RESET + jars.size());
+                        out.flush();
+                } catch (IOException exception) {
+                        log.error("jars list command failed", exception);
+                        out.println(RED + BOLD + "  Unable to scan jars: " + exception.getMessage() + RESET);
+                        out.flush();
+                }
+        }
+
+        private boolean isDixyArtifact(String name) {
+                String lowerName = name.toLowerCase();
+                return lowerName.equals("dixy-agent.jar")
+                                || lowerName.equals("dixy-cli.jar")
+                                || lowerName.endsWith("-plain.jar");
+        }
 
     public DeadlockCommands(
             DeadlockReportService deadlockReportService,
