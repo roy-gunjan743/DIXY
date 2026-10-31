@@ -1,0 +1,55 @@
+# Render Blueprint for DIXY (backend/API in "web" profile).
+# Deploy: Render dashboard -> New -> Blueprint -> pick this repo.
+databases:
+  - name: dixy-db
+    plan: free                 # free Postgres expires after 30 days; change to 0.1c-256mb to keep it
+    databaseName: virtual_deadlock_detection
+    user: dixy
+
+services:
+  - type: web
+    runtime: docker
+    name: dixy
+    plan: free                 # 512 MB, sleeps after 15 min idle; use 0.5c-512mb ($7/mo) for always-on
+    dockerfilePath: ./src/main/java/com/virtual_deadlock_detection/devOps/dev.dockerfile
+    dockerContext: .
+    healthCheckPath: /actuator/health
+    envVars:
+      # "web" profile = plain HTTP server. Without it Spring Shell starts and the app exits.
+      - key: SPRING_PROFILES_ACTIVE
+        value: web
+      # Render sets PORT itself; application.yml already reads ${PORT}.
+
+      # Database (entrypoint turns DATABASE_URL into DB_HOST / DB_PORT)
+      - key: DATABASE_URL
+        fromDatabase:
+          name: dixy-db
+          property: connectionString
+      - key: DB_NAME
+        fromDatabase:
+          name: dixy-db
+          property: database
+      - key: DB_USERNAME
+        fromDatabase:
+          name: dixy-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: dixy-db
+          property: password
+
+      # X-API-Key that clients/agents must send (generated; see Render > Environment)
+      - key: SECURITY_API_KEY
+        generateValue: true
+
+      # Redis isn't used by the code; don't let its health check fail /actuator/health
+      - key: MANAGEMENT_HEALTH_REDIS_ENABLED
+        value: "false"
+
+      # Keep memory small enough for a 512 MB instance
+      - key: JAVA_TOOL_OPTIONS
+        value: -XX:MaxRAMPercentage=70 -XX:+UseSerialGC -Xss512k
+      - key: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE
+        value: "5"
+      - key: SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE
+        value: "1"
